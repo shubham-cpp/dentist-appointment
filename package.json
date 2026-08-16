@@ -1,0 +1,49 @@
+{
+  "name": "dentist-management-system",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "dev:dashboard": "env NODE_OPTIONS=\"--max-old-space-size=512\" next dev",
+    "build": "next build",
+    "start": "env NODE_OPTIONS=\"--max-old-space-size=512\" next start",
+    "lint": "eslint",
+    "test:twilio": "node --env-file=.env.local scripts/test-twilio-call.mjs",
+    "test:twilio:unit": "node --test scripts/test-twilio-call.test.mjs",
+    "test:voice": "tsx --test src/voice-gateway/*.test.ts src/lib/controlled-voice-polling.test.ts src/lib/voice-call-context.test.ts",
+    "voice:dev": "node --env-file=.env.local --import tsx --watch src/voice-gateway/server.ts",
+    "voice:preflight": "node --env-file=.env.local --env-file=.voice-preflight.env --import tsx src/voice-gateway/preflight.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.36",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/websocket": "^11.3.0",
+    "@floating-ui/dom": "^1.8.0",
+    "@tiptap/core": "3.29.0",
+    "@tiptap/extension-link": "^3.29.0",
+    "@tiptap/extension-placeholder": "^3.29.0",
+    "@tiptap/markdown": "^3.29.0",
+    "@tiptap/pm": "^3.29.0",
+    "@tiptap/react": "^3.29.0",
+    "@tiptap/starter-kit": "^3.29.0",
+    "ai": "^7.0.58",
+    "fastify": "^5.11.3",
+    "next": "16.2.12",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "twilio": "^6.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.12",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.11",
+    "typescript": "^5"
+  }
+}

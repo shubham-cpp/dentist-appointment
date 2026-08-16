@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="2026 senior software engineer interview preparation guide for JavaScript, TypeScript, web development, React, Next.js, Python, and full-stack engineering.">
+  <title>Senior Software Engineer Interview Guide · 2026</title>
+  <style>
+    :root {
+      --nav: #0d2850;
+      --nav-deep: #081d3c;
+      --primary: #1268e8;
+      --primary-hover: #0d56c5;
+      --canvas: #f3f6f9;
+      --surface: #ffffff;
+      --surface-subtle: #f8fafc;
+      --text: #152238;
+      --muted: #5f6f82;
+      --quiet: #617286;
+      --border: #dce3ea;
+      --border-strong: #c9d3de;
+      --teal: #0b8f86;
+      --teal-soft: #e1f5f2;
+      --lavender: #715dc4;
+      --lavender-soft: #eeeafd;
+      --blue-soft: #e5effe;
+      --amber: #a76504;
+      --amber-soft: #fff2d7;
+      --danger: #b33838;
+      --focus: #83b4fa;
+      --font: "Atkinson Hyperlegible", "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --radius-sm: 0.375rem;
+      --radius-md: 0.5rem;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.55;
+      font-synthesis: none;
+    }
+    a { color: inherit; }
+    button, input { color: inherit; font: inherit; }
+    button, a, input { outline: none; }
+    button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+    h1, h2, h3, h4, p { margin: 0; }
+    h1, h2, h3, h4 { line-height: 1.25; }
+    h1 { font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -0.04em; }
+    h2 { font-size: clamp(1.35rem, 2vw, 1.8rem); letter-spacing: -0.025em; }
+    h3 { font-size: 1.1rem; }
+    code {
+      padding: 0.08rem 0.28rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--surface-subtle);
+      color: var(--nav);
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.9em;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 252px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .toc-rail {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.5rem 1.1rem;
+      background: var(--nav);
+      border-right: 1px solid #183760;
+      color: #d8e4f2;
+    }
+    .brand {
+      padding-bottom: 1.4rem;
+      border-bottom: 1px solid #264469;
+    }
+    .brand strong { display: block; color: #fff; font-size: 1.05rem; }
+    .brand span { display: block; margin-top: 0.25rem; color: #aebfd4; font-size: 0.82rem; }
+    .toc-title {
+      margin: 1.35rem 0 0.6rem;
+      color: #aebfd4;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .toc-list { display: grid; gap: 0.18rem; margin: 0; padding: 0; list-style: none; }
+    .toc-list a {
+      display: block;
+      padding: 0.48rem 0.6rem;
+      border-radius: var(--radius-sm);
+      color: #c7d5e5;
+      font-size: 0.92rem;
+      text-decoration: none;
+      transition: background-color 140ms ease, color 140ms ease;
+    }
+    .toc-list a:hover, .toc-list a:focus-visible { background: #173863; color: #fff; }
+    .rail-note {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid #264469;
+      color: #b9c9da;
+      font-size: 0.82rem;
+    }
+    .rail-note strong { color: #fff; }
+
+    .workspace { min-width: 0; }
+    .content {
+      width: min(100%, 1160px);
+      margin: 0 auto;
+      padding: 2.2rem clamp(1rem, 4vw, 3.25rem) 4rem;
+    }
+    .topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+    .topline a { color: var(--primary-hover); font-weight: 600; }
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+      gap: 2rem;
+      align-items: end;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .intro p { max-width: 70ch; margin-top: 1rem; color: var(--muted); font-size: 1.05rem; }
+    .version-line {
+      align-self: stretch;
+      padding: 1rem 1.1rem;
+      border-left: 3px solid var(--teal);
+      background: var(--teal-soft);
+      color: #174d49;
+      font-size: 0.92rem;
+    }
+    .version-line strong { display: block; margin-bottom: 0.25rem; color: #0b5f58; }
+    .methodology {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 1.8rem;
+    }
+    .methodology > div {
+      min-width: 0;
+      padding: 0.85rem 0.95rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    .methodology strong { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; }
+    .methodology span { color: var(--muted); font-size: 0.86rem; }
+    .toolbar {
+      position: sticky;
+      top: 0.75rem;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 1.5rem;
+      padding: 0.7rem;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: color-mix(in srgb, var(--surface) 94%, transparent);
+    }
+    .search-wrap { position: relative; flex: 1 1 260px; }
+    .search-wrap label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    #search {
+      width: 100%;
+      min-height: 2.5rem;
+      padding: 0.55rem 0.7rem;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+    }
+    #search::placeholder { color: var(--quiet); }
+    .toolbar button {
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      font-weight: 600;
+      transition: border-color 140ms ease, background-color 140ms ease;
+    }
+    .toolbar button:hover { border-color: var(--primary); background: var(--blue-soft); }
+    .toolbar .primary-action { border-color: var(--primary); background: var(--primary); color: #fff; }
+    .toolbar .primary-action:hover { background: var(--primary-hover); }
+    .match-count { min-width: 8rem; color: var(--muted); font-size: 0.88rem; text-align: right; }
+
+    .topic-list { display: grid; gap: 1rem; }
+    .topic-section {
+      scroll-margin-top: 5.4rem;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      overflow: clip;
+    }
+    .topic-section[hidden] { display: none; }
+    .topic-section > summary {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.6rem 1rem;
+      padding: 1.15rem 1.25rem;
+      cursor: pointer;
+      list-style: none;
+    }
+    .topic-section > summary::-webkit-details-marker, .question-card > summary::-webkit-details-marker { display: none; }
+    .topic-section > summary::after, .question-card > summary::after {
+      content: "+";
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      color: var(--primary);
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+    .topic-section[open] > summary::after, .question-card[open] > summary::after { content: "−"; }
+    .topic-section > summary:hover { background: var(--surface-subtle); }
+    .section-kicker { color: var(--primary-hover); font-size: 0.82rem; font-weight: 700; }
+    .section-title { display: block; margin-top: 0.18rem; font-size: 1.35rem; }
+    .section-summary { grid-column: 1 / -1; color: var(--muted); font-size: 0.92rem; }
+    .section-count { color: var(--quiet); font-size: 0.84rem; font-weight: 500; }
+    .topic-body { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--border); }
+    .noscript-note { margin-top: 1rem; padding: 0.75rem 0.9rem; border: 1px solid var(--amber); border-radius: var(--radius-sm); background: var(--amber-soft); color: #6b4604; }
+    .question-list { display: grid; gap: 0.65rem; padding-top: 1rem; }
+    .question-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-subtle);
+      overflow: clip;
+    }
+    .question-card[hidden] { display: none; }
+    .question-card > summary {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 0.7rem;
+      align-items: start;
+      padding: 0.78rem 0.85rem;
+      cursor: pointer;
+      list-style: none;
+    }
+    .question-card > summary:hover { background: #f2f6fb; }
+    .question-number { color: var(--quiet); font-variant-numeric: tabular-nums; font-size: 0.82rem; font-weight: 700; }
+    .question-title { font-weight: 700; }
+    .mode {
+      align-self: start;
+      padding: 0.12rem 0.38rem;
+      border: 1px solid var(--border-strong);
+      border-radius: 3px;
+      color: var(--muted);
+      background: var(--surface);
+      font-size: 0.73rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .question-body {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      padding: 0 0.85rem 1rem 2.95rem;
+      border-top: 1px solid var(--border);
+    }
+    .question-body section { padding-top: 0.85rem; }
+    .question-body h4 { margin-bottom: 0.3rem; color: var(--nav); font-size: 0.83rem; letter-spacing: 0.02em; text-transform: uppercase; }
+    .question-body p, .question-body li { color: var(--muted); font-size: 0.92rem; }
+    .question-body ul { display: grid; gap: 0.28rem; margin: 0; padding-left: 1.1rem; }
+    .question-body .follow-up { color: var(--text); }
+    .question-body .source-list { display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; }
+    .source-list a { color: var(--primary-hover); font-size: 0.84rem; font-weight: 600; }
+    .source-list a:hover { text-decoration: underline; }
+
+    .source-ledger {
+      margin-top: 2.3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-strong);
+    }
+    .source-ledger > p { margin-top: 0.45rem; color: var(--muted); }
+    .source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem 1.4rem; margin-top: 1rem; padding: 0; list-style: none; }
+    .source-grid li { color: var(--muted); font-size: 0.88rem; }
+    .source-grid a { color: var(--primary-hover); font-weight: 600; }
+    footer { margin-top: 2rem; color: var(--quiet); font-size: 0.84rem; }
+
+    @media (max-width: 860px) {
+      .app-shell { display: block; }
+      .toc-rail { position: static; height: auto; padding: 1rem; }
+      .brand { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-bottom: 0.85rem; }
+      .toc-title { margin-top: 1rem; }
+      .toc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .rail-note { display: none; }
+      .content { padding-top: 1.4rem; }
+    }
+    @media (max-width: 620px) {
+      .intro { display: block; }
+      .version-line { margin-top: 1.2rem; }
+      .methodology { grid-template-columns: 1fr; }
+      .toolbar { position: static; }
+      .match-count { min-width: auto; text-align: left; }
+      .topic-section > summary { padding: 1rem; }
+      .topic-body { padding: 0 0.75rem 0.9rem; }
+      .question-body { grid-template-columns: 1fr; gap: 0; padding-left: 2.55rem; }
+      .question-card > summary { grid-template-columns: auto minmax(0, 1fr); }
+      .mode { grid-column: 2; justify-self: start; }
+      .question-card > summary::after { grid-column: 2; grid-row: 1 / span 2; }
+      .source-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    }
+    @media print {
+      body { background: #fff; color: #000; }
+      .app-shell { display: block; }
+      .toc-rail, .toolbar { display: none; }
+      .content { width: auto; padding: 0; }
+      .intro { display: block; }
+      .version-line { margin-top: 1rem; }
+      .topic-section, .question-card { break-inside: avoid; }
+      details > :not(summary) { display: block !important; }
+      summary::after { display: none; }
+      .topic-section, .question-card { border-color: #999; }
+      a { color: #000; text-decoration: underline; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="toc-rail" aria-label="Guide navigation">
+      <div class="brand">
+        <div>
+          <strong>Senior SWE interview guide</strong>
+          <span>India · 2026 edition</span>
+        </div>
+      </div>
+      <p class="toc-title">Contents</p>
+      <nav aria-label="Table of contents">
+        <ol class="toc-list">
+          <li><a href="#javascript">JavaScript</a></li>
+          <li><a href="#typescript">TypeScript</a></li>
+          <li><a href="#web-platform">Web + performance</a></li>
+          <li><a href="#react">React</a></li>
+          <li><a href="#nextjs">Next.js</a></li>
+          <li><a href="#python">Python APIs + ORM</a></li>
+          <li><a href="#full-stack">Full-stack engineering</a></li>
+          <li><a href="#sources">Source ledger</a></li>
+        </ol>
+      </nav>
+      <p class="rail-note"><strong>Study order</strong><br>JavaScript → TypeScript → Web → React → Next.js → Python APIs → Full-stack design</p>
+    </aside>
+
+    <main class="workspace">
+      <div class="content">
+        <div class="topline">
+          <span>Prepared 03 August 2026 · Product-heavy with service-company coverage</span>
+          <a href="#sources">Open sources</a>
+        </div>
+        <header class="intro">
+          <div>
+            <h1>Interview questions that test senior judgment.</h1>
+            <p>98 evidence-guided prep cards across the stack. Open a card to see the expected answer shape, production trade-offs, and a follow-up prompt.</p>
+          </div>
+          <div class="version-line">
+            <strong>Version lens</strong>
+            ECMAScript 2026 · TypeScript 6.0 · React 19.2 · Next.js 16 App Router · Python 3.14 · Flask 3.1.x
+          </div>
+        </header>
+        <section class="methodology" aria-label="How to use this guide">
+          <div><strong>Use the answer shape</strong><span>Define the concept, state the trade-off, then show how you would measure it.</span></div>
+          <div><strong>Think like a senior</strong><span>Include failure modes, security, observability, rollout, and operational ownership.</span></div>
+          <div><strong>Read the evidence note</strong><span>Official specifications anchor technical facts. Company patterns are a synthesis, not a frequency survey.</span></div>
+        </section>
+        <section class="toolbar" aria-label="Guide controls">
+          <div class="search-wrap">
+            <label for="search">Search interview questions</label>
+            <input id="search" type="search" placeholder="Search by topic, concept, or mode" autocomplete="off">
+          </div>
+          <button type="button" id="expand-all" class="primary-action">Expand all</button>
+          <button type="button" id="collapse-all">Collapse all</button>
+          <span id="match-count" class="match-count" role="status" aria-live="polite">98 questions</span>
+        </section>
+        <section id="guide-sections" class="topic-list" aria-label="Interview question sections"></section>
+        <noscript>
+          <p class="noscript-note">JavaScript is required to render the question cards and controls in this standalone guide.</p>
+        </noscript>
+        <section id="sources" class="source-ledger" aria-labelledby="sources-title">
+          <h2 id="sources-title">Source ledger</h2>
+          <p>Primary documentation anchors the technical explanations. The question selection is an evidence-guided synthesis for senior product and service interviews in India; no source can prove an exact company-wide question frequency.</p>
+          <ul class="source-grid" id="source-grid"></ul>
+        </section>
+        <footer>Standalone HTML · no external scripts, fonts, or runtime dependencies.</footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+
+    const sourceMap = {
+      ecma: ["ECMAScript 2026", "https://tc39.es/ecma262/"],
+      html: ["WHATWG HTML", "https://html.spec.whatwg.org/multipage/"],
+      eventloop: ["WHATWG event loop", "https://html.spec.whatwg.org/multipage/webappapis.html#event-loops"],
+      node: ["Node.js event loop", "https://nodejs.org/en/learn/asynchronous-work/dont-block-the-event-loop"],
+      nodeTimers: ["Node.js timers", "https://nodejs.org/api/timers.html"],
+      tsNarrow: ["TypeScript narrowing", "https://www.typescriptlang.org/docs/handbook/2/narrowing.html"],
+      tsGeneric: ["TypeScript generics", "https://www.typescriptlang.org/docs/handbook/2/generics.html"],
+      tsStrict: ["TypeScript strict", "https://www.typescriptlang.org/tsconfig/strict.html"],
+      tsConfig: ["TypeScript TSConfig", "https://www.typescriptlang.org/tsconfig/"],
+      ts6: ["TypeScript 6.0 release notes", "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-6-0.html"],
+      aria: ["WAI-ARIA 1.2", "https://www.w3.org/TR/wai-aria/"],
+      cascade: ["CSS Cascade", "https://www.w3.org/TR/css-cascade-6/"],
+      flex: ["CSS Flexbox", "https://www.w3.org/TR/css-flexbox-1/"],
+      grid: ["CSS Grid", "https://www.w3.org/TR/css-grid/"],
+      contain: ["CSS Containment", "https://www.w3.org/TR/css-contain-1/"],
+      vitals: ["Core Web Vitals", "https://web.dev/articles/vitals"],
+      lcp: ["Optimize LCP", "https://web.dev/articles/optimize-lcp"],
+      inp: ["Optimize INP", "https://web.dev/articles/optimize-inp"],
+      cls: ["Optimize CLS", "https://web.dev/articles/optimize-cls"],
+      timing: ["Resource Timing", "https://www.w3.org/TR/resource-timing/"],
+      react18: ["React 18 upgrade guide", "https://react.dev/blog/2022/03/08/react-18-upgrade-guide"],
+      react19: ["React 19", "https://react.dev/blog/2024/12/05/react-19"],
+      react192: ["React 19.2", "https://react.dev/blog/2025/10/01/react-19-2"],
+      effects: ["React useEffect", "https://react.dev/reference/react/useEffect"],
+      rsc: ["React Server Components", "https://react.dev/reference/rsc/server-components"],
+      compiler: ["React Compiler 1.0", "https://react.dev/blog/2025/10/07/react-compiler-1"],
+      tanstack: ["TanStack Query defaults", "https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults"],
+      queryClient: ["TanStack QueryClient", "https://tanstack.com/query/v5/docs/reference/QueryClient"],
+      redux: ["Redux Toolkit", "https://redux-toolkit.js.org/api/configurestore/"],
+      reactSecurity: ["React Server Components security", "https://react.dev/blog/2025/12/11/denial-of-service-and-source-code-exposure-in-react-server-components"],
+      nextApp: ["Next.js App Router", "https://nextjs.org/docs/app"],
+      next16: ["Next.js 16", "https://nextjs.org/blog/next-16"],
+      nextCache: ["Next.js use cache", "https://nextjs.org/docs/app/api-reference/directives/use-cache"],
+      nextPpr: ["Next.js Cache Components", "https://nextjs.org/docs/app/api-reference/config/next-config-js/cacheComponents"],
+      nextUpgrade: ["Next.js 16 upgrade guide", "https://nextjs.org/docs/app/guides/upgrading/version-16"],
+      nextSelfHost: ["Next.js self-hosting", "https://nextjs.org/docs/app/guides/self-hosting"],
+      pyModel: ["Python data model", "https://docs.python.org/3/reference/datamodel.html"],
+      pyTyping: ["Python typing", "https://docs.python.org/3/library/typing.html"],
+      pyAsync: ["Python asyncio tasks", "https://docs.python.org/3/library/asyncio-task.html"],
+      pyFree: ["Python free-threading", "https://docs.python.org/3/howto/free-threading-python.html"],
+      flaskFactory: ["Flask app factories", "https://flask.palletsprojects.com/en/stable/patterns/appfactories/"],
+      flaskBlueprint: ["Flask blueprints", "https://flask.palletsprojects.com/en/stable/blueprints/"],
+      flaskAsync: ["Flask async support", "https://flask.palletsprojects.com/en/stable/async-await/"],
+      flaskDeploy: ["Flask deployment", "https://flask.palletsprojects.com/en/stable/deploying/"],
+      fastapiAsync: ["FastAPI async", "https://fastapi.tiangolo.com/async/"],
+      fastapiDi: ["FastAPI dependencies", "https://fastapi.tiangolo.com/tutorial/dependencies/"],
+      fastapiLife: ["FastAPI lifespan", "https://fastapi.tiangolo.com/advanced/events/"],
+      pydantic: ["Pydantic validation", "https://pydantic.dev/docs/validation/latest/concepts/models/"],
+      sqlalchemySession: ["SQLAlchemy Session", "https://docs.sqlalchemy.org/en/20/orm/session.html"],
+      sqlalchemyQuery: ["SQLAlchemy ORM query guide", "https://docs.sqlalchemy.org/en/20/orm/queryguide/"],
+      rfc: ["HTTP Semantics · RFC 9110", "https://www.rfc-editor.org/rfc/rfc9110.html"],
+      openapi: ["OpenAPI 3.1.1", "https://spec.openapis.org/oas/v3.1.1.html"],
+      owasp: ["OWASP ASVS 5.0", "https://owasp.org/www-project-application-security-verification-standard/"],
+      otel: ["OpenTelemetry specification", "https://opentelemetry.io/docs/specs/otel/overview/"],
+      k8sHpa: ["Kubernetes HPA", "https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/"],
+      k8sObs: ["Kubernetes observability", "https://kubernetes.io/docs/concepts/cluster-administration/observability/"]
+    };
+
+    const q = (mode, question, tests, answer, scale, followUp, sources) => ({ mode, question, tests, answer, scale, followUp, sources });
+
+    const guideData = [
+      {
+        id: "javascript",
+        title: "JavaScript",
+        kicker: "Runtime and language fundamentals",
+        summary: "Use browser and Node.js semantics to reason about correctness, concurrency, memory, and throughput.",
+        baseline: "ECMAScript 2026 · evergreen browsers · Node.js runtime",
+        questions: [
+          q("Concept", "How does a closure work, and when can it create a memory leak?", "Lexical scope, retained environments, and lifecycle reasoning.", ["A closure captures bindings from its defining scope; it does not copy values automatically.", "The captured environment stays reachable while the function or a listener remains reachable.", "Remove listeners, clear timers, and release references at component or request boundaries."], "Profile heap growth. Avoid retaining large request objects, DOM nodes, caches, or per-user data in long-lived callbacks.", "Show a leak caused by a timer and explain how you would prove the fix with a heap snapshot.", ["ecma"]),
+          q("Concept", "Explain the prototype chain. How do `class` declarations relate to it?", "Object lookup, inheritance, and the difference between syntax and runtime behavior.", ["Property lookup walks an object's own properties, then its prototype chain.", "`class` creates constructor functions and prototype methods; it does not create a separate object model.", "Prefer composition when inheritance creates hidden coupling or fragile `super` calls."], "Keep hot object shapes stable. Avoid changing prototypes at runtime because it can de-optimise inline caches.", "Design a safe extension point for a library without mutating `Object.prototype`.", ["ecma"]),
+          q("Concept", "What determines the value of `this`, and why do arrow functions behave differently?", "Call-site rules, lexical `this`, and callback correctness.", ["Regular functions receive `this` from the call site: method, explicit bind/call, constructor, or default mode.", "Arrow functions capture lexical `this` and cannot be rebound with `call` or `bind`.", "Do not rely on implicit binding in callbacks that may be passed across layers."], "Use explicit boundaries in event handlers and service objects. This reduces production bugs when callbacks are refactored.", "Fix a callback that loses its receiver without adding a global variable.", ["ecma"]),
+          q("Concept", "When would you choose ES modules over CommonJS in a Node.js service?", "Module evaluation, interoperability, tree-shaking, and deployment constraints.", ["ES modules use static imports and an explicit module graph; CommonJS loads through `require` at runtime.", "Check package `type`, file extensions, `exports`, and the target runtime before mixing formats.", "Keep one boundary for legacy packages and test both development and production resolution."], "Prefer a consistent ESM or CJS policy. Mixed graphs can create duplicate module instances, interop surprises, and slower tooling.", "Explain how you would migrate a package without breaking consumers that still use `require`.", ["ecma"]),
+          q("Debugging", "What is the output order when promises, `queueMicrotask`, timers, and DOM events are mixed?", "The browser event loop, task queues, microtasks, and rendering opportunities.", ["The current task runs first; its microtasks drain before the browser starts another task.", "Promise reactions and `queueMicrotask` join the microtask checkpoint; timers and events are later tasks.", "Do not assume a timer is exact or that a microtask yields to rendering."], "Bound recursive microtasks. Long microtask chains can delay paint and input even when no synchronous loop is visible.", "Predict a short log sequence, then explain how you would verify it with the Performance panel.", ["eventloop", "nodeTimers"]),
+          q("Concept", "How does `async`/`await` handle errors, and how would you cancel work?", "Promise rejection, structured cleanup, and cancellation semantics.", ["An `async` function returns a promise; a thrown error becomes a rejection.", "Use `try`/`catch` around the boundary that can recover, and preserve the original cause when rethrowing.", "Use `AbortController` and propagate its signal to fetch, streams, and other cancellable operations."], "Cancel stale requests and release resources in `finally`. Do not leave retries running after a user or request has gone away.", "Design a request helper that times out, cancels, and preserves an error cause.", ["ecma", "html"]),
+          q("Design", "When should you use debounce, throttle, or `requestAnimationFrame`?", "Rate control based on user intent and rendering cadence.", ["Debounce waits for quiet time and suits search or validation after typing.", "Throttle limits frequency and suits scroll, resize, or telemetry.", "`requestAnimationFrame` aligns visual work with the next paint and should not carry network side effects."], "Keep handlers cheap, passive where possible, and cancel pending work when the owning view disappears.", "Choose a strategy for autocomplete, drag feedback, and analytics, and justify each choice.", ["html"]),
+          q("Debugging", "What causes a JavaScript memory leak in a long-lived web application?", "Reachability, heap snapshots, and ownership boundaries.", ["A leak is an unintended strong reference that keeps objects reachable from a root.", "Common causes include event listeners, timers, subscriptions, detached DOM, caches, and closures.", "Compare heap snapshots over a repeatable workflow and inspect retaining paths."], "Use bounded caches, cleanup functions, weak references only when their semantics fit, and lifecycle tests for subscriptions.", "Diagnose a dashboard that grows by 20 MB after each route change.", ["node", "html"]),
+          q("Scaling", "Why can CPU-heavy JavaScript block a Node.js server, and what are your options?", "Event-loop fairness, worker pools, and service decomposition.", ["JavaScript execution shares the event loop with request callbacks, so long CPU work delays all other requests.", "Move parallelisable CPU work to `worker_threads`, a job queue, or a separate service.", "Measure queue delay and event-loop lag before selecting a fix."], "Set payload limits and time budgets. Use backpressure and bounded concurrency so a traffic spike does not exhaust workers.", "Design thumbnail generation for a Node API with a 200 ms p95 latency target.", ["node"]),
+          q("Scaling", "Explain streams and backpressure in Node.js.", "Incremental I/O, producer-consumer flow control, and failure propagation.", ["A stream processes data incrementally instead of buffering the entire payload.", "Backpressure slows the producer when the consumer cannot keep up.", "Use `pipeline`-style composition so errors and teardown propagate across stages."], "Cap buffers, enforce upload limits, and monitor throughput, memory, and aborted connections.", "Stream a large export to object storage without retaining it in application memory.", ["node"]),
+          q("Debugging", "How would you profile a slow Node.js endpoint?", "Measurement before optimisation and the difference between CPU, I/O, and queueing delay.", ["Start with request timing, event-loop delay, downstream timings, and a representative trace.", "Use CPU profiles for hot JavaScript, heap snapshots for memory, and database/network metrics for waiting.", "Fix the dominant contributor, then compare the same workload and percentile."], "Set a performance budget and watch p95/p99, event-loop lag, error rate, and saturation after rollout.", "Give a measurement plan for an endpoint whose p99 doubled after a release.", ["node", "nodeTimers"]),
+          q("Security", "What is prototype pollution, and how do you reduce its risk?", "Untrusted key handling, object inheritance, and defensive parsing.", ["Prototype pollution changes an inherited object property through unsafe paths such as deep assignment of `__proto__`.", "Use safe schemas, allow-lists, `Object.create(null)` where appropriate, and patched dependencies.", "Do not merge untrusted objects blindly or treat input validation as type checking only."], "Log rejected keys and test nested payloads. Keep dependency updates and security advisories part of the release process.", "Review a recursive merge helper and list the tests needed before using it on user input.", ["ecma"]),
+          q("Design", "How would you design a resilient JavaScript module boundary for a large codebase?", "API design, dependency direction, and runtime validation.", ["Keep the public surface small, explicit, and versioned; hide implementation details behind functions or types.", "Separate pure domain logic from I/O, timers, and global state.", "Validate data at untrusted boundaries because JavaScript types do not exist at runtime."], "Use dependency inversion, bounded retries, and observable errors. Avoid circular imports and hidden singleton state.", "Sketch a module boundary for payments that must support a second provider next quarter.", ["ecma", "html"]),
+          q("Behavioral", "Tell me about a JavaScript performance regression you owned from detection to rollout.", "Operational ownership, trade-off clarity, and evidence-based communication.", ["State the user impact and the baseline metric before describing the fix.", "Explain the smallest safe change, how you tested it, and what you chose not to change.", "Close with rollout guards, monitoring, and the learning that changed future practice."], "Senior answers connect code-level work to p95/p99, conversion, error budgets, or infrastructure cost.", "What signal would make you roll the change back?", ["node", "timing"])
+        ]
+      },
+      {
+        id: "typescript",
+        title: "TypeScript",
+        kicker: "Static contracts for dynamic systems",
+        summary: "Show how types improve design without confusing compile-time guarantees with runtime validation.",
+        baseline: "TypeScript 6.0 · strict mode · ESM-first projects",
+        questions: [
+          q("Concept", "What does structural typing mean, and when would you want nominal identity?", "Assignability, excess property checks, and domain safety.", ["A value is assignable when it has the required structure, regardless of its declared name.", "Extra property checks mainly apply to fresh object literals; they are not a general exact-object rule.", "Use branded or opaque types when two structurally identical values must not be mixed."], "Brand IDs, currencies, and tenant keys at boundaries. Do not create nominal wrappers for every internal object.", "Prevent a `UserId` from being passed to an `InvoiceId` function while keeping runtime data as strings.", ["tsNarrow", "tsGeneric"]),
+          q("Concept", "Compare `any`, `unknown`, and `never` in a public API.", "Soundness boundaries and exhaustive reasoning.", ["`any` disables checking and can spread unsafety through inference.", "`unknown` requires narrowing before use and is the right default for untrusted values.", "`never` represents an impossible value or an unreturned code path and supports exhaustiveness checks."], "Use `unknown` at JSON, plugin, and catch boundaries. Keep `any` isolated, documented, and measured.", "Write an exhaustive switch for a discriminated union that fails compilation when a case is added.", ["tsNarrow"]),
+          q("Concept", "How does control-flow narrowing work, and where can it become unsafe?", "Type guards, discriminated unions, and mutation invalidation.", ["TypeScript narrows a union using checks such as `typeof`, `in`, equality, predicates, and discriminants.", "A custom predicate is a claim; it must match runtime behavior or it can create false safety.", "Narrowing can be invalidated when a value is mutated or an alias changes it."], "Prefer immutable data and small validation functions. Test predicates with invalid and boundary inputs.", "Model an API result as `loading | success | failure` and render every state without a cast.", ["tsNarrow"]),
+          q("Concept", "How do generic constraints and inference improve a reusable function?", "Parametric design, constraints, and inference trade-offs.", ["A generic preserves relationships between inputs and outputs instead of replacing them with `unknown` or unions.", "Constraints state the operations a type must support without over-constraining callers.", "Let inference work at the boundary; add explicit parameters when inference becomes ambiguous."], "Keep generic APIs shallow and readable. Complex inference can slow the compiler and make errors unusable.", "Design a typed `pluck` function that preserves the selected property type.", ["tsGeneric"]),
+          q("Concept", "Explain conditional, mapped, and template-literal types. When should you stop using them?", "Type-level transformation and maintainability.", ["Conditional types branch on assignability; mapped types transform keys; template literals transform string unions.", "They are useful for derived public contracts and constrained configuration.", "Prefer a named helper or runtime schema when the type becomes recursive, opaque, or slow to compile."], "Treat type-level complexity as build-time cost and developer-experience risk. Keep generated types close to their source contract.", "Replace an unreadable conditional type with a smaller public type and a runtime validator.", ["tsGeneric", "ts6"]),
+          q("Concept", "What variance problems can appear with function types?", "Parameter and return assignability, callbacks, and soundness.", ["Return types are generally covariant; function parameters need contravariant reasoning for safe substitution.", "Method bivariance and configuration choices can make callback assignment more permissive than expected.", "A callback that accepts a narrower type cannot safely replace one that accepts a wider type."], "Keep callback contracts explicit and test substitutability when designing event or middleware interfaces.", "Explain whether a handler for `MouseEvent` can replace a handler for `Event` and why.", ["tsGeneric"]),
+          q("Design", "When should you use overloads instead of a union or generic?", "API ergonomics and implementation truth.", ["Use a union when one implementation has one clear input shape and returns a common result.", "Use overloads when input forms produce meaningfully different return types and callers benefit from precise call signatures.", "The implementation signature must be broad enough to handle every overload and is not visible to callers."], "Prefer the smallest public contract. Too many overloads create maintenance and documentation cost.", "Design a function that returns a value for a key or all values when no key is supplied.", ["tsGeneric"]),
+          q("Concept", "What disappears at runtime when TypeScript compiles?", "Type erasure and the boundary between static and runtime behavior.", ["Interfaces, type aliases, generic parameters, and most annotations are erased.", "Enums, classes, decorators depending on configuration, and emitted helpers can have runtime output.", "A type declaration cannot validate JSON, environment variables, or user input by itself."], "Pair compile-time contracts with runtime schemas at external boundaries and keep the source of truth clear.", "Explain why `value as User` does not protect an API handler from malformed JSON.", ["tsNarrow", "tsConfig"]),
+          q("Concept", "What does `satisfies` solve compared with a type annotation or an assertion?", "Literal preservation, assignability checks, and safe configuration objects.", ["`satisfies` checks that an expression conforms to a type while preserving useful literal inference.", "A type annotation can widen the expression; an assertion can silence errors without proving compatibility.", "Use it for configuration maps and lookup tables where keys and literal values drive later inference."], "Keep runtime validation separate. A compile-time `satisfies` check cannot protect configuration loaded from JSON or environment variables.", "Type a route configuration so invalid keys fail while each route keeps its literal method and path.", ["tsGeneric", "tsStrict"]),
+          q("Configuration", "Which strict compiler options do you expect in a senior TypeScript codebase?", "Sound defaults and incremental adoption.", ["Start with `strict`, then evaluate `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and related flags.", "Explain the bug class each flag prevents and the migration cost it creates.", "Do not turn off a flag globally to silence one poorly modelled boundary."], "Use project references or staged packages for migrations. Track remaining escape hatches as work, not permanent design.", "Plan a six-week migration of a JavaScript package to strict TypeScript.", ["tsStrict", "tsConfig", "ts6"]),
+          q("Build", "How do ESM, CommonJS, `moduleResolution`, and package `exports` interact?", "A working mental model of compilation and runtime resolution.", ["TypeScript resolves types and modules according to compiler settings, package metadata, and the selected environment.", "The runtime and the compiler must agree on format, conditions, extensions, and path aliases.", "Test the published package, not only source imports, because `exports` can expose a different graph."], "Use one documented module policy and a package-level compatibility test. Avoid path aliases that do not work in the deployed runtime.", "Diagnose a package that compiles locally but fails with `ERR_MODULE_NOT_FOUND` after publishing.", ["tsConfig", "ts6"]),
+          q("Design", "When do you write a declaration file or module augmentation?", "Typing an untyped dependency without lying to consumers.", ["Use declarations when runtime code exists but its types are missing or incomplete.", "Augmentation extends a known module's declarations and must match the actual runtime shape.", "Keep custom declarations close to the dependency boundary and add a compile-time fixture."], "Pin dependency versions and review declaration changes like code. A wrong declaration can be more dangerous than an explicit `unknown`.", "Add safe types for a legacy JavaScript package whose function accepts two input shapes.", ["tsConfig"]),
+          q("Scaling", "How do you improve TypeScript build performance in a monorepo?", "Compiler work, project boundaries, and measurement.", ["Measure diagnostics and trace resolution before changing flags.", "Use project references, incremental builds, stable package boundaries, and narrow include patterns.", "Reduce pathological conditional types and duplicate library declarations before reaching for broad skips."], "Keep `skipLibCheck` a deliberate trade-off, not a substitute for dependency hygiene. Track cold and warm build time in CI.", "Choose between project references, a build cache, and reducing type-level complexity for a slow repository.", ["tsConfig", "ts6"]),
+          q("Behavioral", "Describe a time you improved a TypeScript API without breaking callers.", "Compatibility thinking, migration design, and communication.", ["Explain the existing contract, the failure mode, and why the new design is safer.", "Use additive changes, deprecation windows, codemods, or adapters where appropriate.", "Measure adoption and remove the compatibility layer only after the agreed migration signal."], "Senior engineers make type ergonomics, runtime behavior, and release policy agree.", "What would you document in the migration guide and what would you automate?", ["tsStrict", "tsConfig"])
+        ]
+      },
+      {
+        id: "web-platform",
+        title: "Web development and performance",
+        kicker: "The platform under every framework",
+        summary: "Reason from browser semantics, accessibility, layout, rendering, network behavior, and field evidence.",
+        baseline: "HTML Living Standard · CSS specs · Core Web Vitals at p75",
+        questions: [
+          q("Concept", "How do semantic HTML elements improve accessibility and maintainability?", "Native browser meaning, landmarks, and progressive enhancement.", ["Use elements for their native meaning: headings, navigation, main content, forms, buttons, and lists.", "Native semantics provide keyboard behavior and accessible names that generic containers do not.", "A semantic structure also improves testing, navigation, and resilience when JavaScript fails."], "Start with the platform. Add ARIA only when native HTML cannot express the interaction.", "Refactor a clickable `div` into an accessible control and explain the remaining design checks.", ["html", "aria"]),
+          q("Concept", "What makes a form accessible and reliable?", "Labels, constraints, error association, and user recovery.", ["Every control needs a visible or programmatic label and a sensible name.", "Use native input types and constraints, then provide clear error text linked with `aria-describedby` or an equivalent.", "Preserve entered data and focus the first useful error without trapping the user."], "Validate on the server too. Treat client validation as feedback, not authorization.", "Design an email and password form that works with a screen reader and a slow network.", ["html", "aria"]),
+          q("Concept", "When should you use ARIA, and when should you avoid it?", "Host-language semantics and accessible interaction states.", ["Prefer native HTML because browsers already implement its semantics and keyboard behavior.", "Use ARIA to describe custom widgets or states that the host language cannot express.", "An ARIA role does not add keyboard behavior, focus management, or validation by itself."], "Test with keyboard navigation and an accessibility tree. Do not use ARIA to hide a broken interaction model.", "Review a custom combobox and list the required roles, states, focus rules, and failure cases.", ["aria", "html"]),
+          q("Concept", "How do cascade layers, specificity, and inheritance work together?", "Predictable CSS composition at scale.", ["The cascade considers origin, importance, layers, specificity, and source order.", "Inheritance applies only to inheritable properties; specificity should not be the main architecture.", "Use layers and component boundaries to make ownership explicit before adding selectors."], "Keep selectors shallow and remove specificity debt. A predictable cascade reduces regressions and CSS bundle churn.", "Resolve a style conflict between a reset, a component, and a utility layer without adding `!important`.", ["cascade"]),
+          q("Design", "When would you choose Grid, Flexbox, or normal flow?", "Layout intent and resilience across content sizes.", ["Normal flow is the safest default for documents and vertical content.", "Flexbox handles one-dimensional alignment; Grid handles two-dimensional tracks and explicit regions.", "Choose based on content and change tolerance, not on a framework habit."], "Test long labels, localization, zoom, and narrow viewports. Avoid fixed heights that turn overflow into a production bug.", "Build a two-column settings page that collapses without changing reading order.", ["flex", "grid"]),
+          q("Debugging", "What creates a stacking context or containing block, and why does that matter?", "Positioning, z-index, and visual bugs.", ["Positioned elements, transforms, opacity, containment, and other properties can create new stacking or containing contexts.", "`z-index` only compares elements within the relevant stacking context.", "Inspect the ancestor chain before increasing a z-index value."], "Keep overlays in a deliberate layer and avoid accidental transforms on large containers.", "Fix a tooltip hidden behind a transformed panel without using an extreme z-index.", ["html", "contain"]),
+          q("Performance", "Describe the critical rendering path and safe script-loading choices.", "Parsing, blocking resources, and first render trade-offs.", ["HTML parsing discovers resources; CSS can block rendering; synchronous scripts can block parsing.", "Use `defer` for ordered scripts that can wait for parsing, `async` for independent scripts, and module semantics when appropriate.", "Measure the user-visible path instead of optimising transfer bytes alone."], "Inline only critical work, preload the true LCP asset, and remove render-blocking dependencies that do not affect the first view.", "Explain how you would load analytics without delaying input or contentful paint.", ["html", "vitals"]),
+          q("Performance", "How would you improve LCP for a content-heavy page?", "Largest element discovery, server response, and asset priority.", ["Identify the actual LCP element in field and lab traces before changing code.", "Improve TTFB, preload or prioritise the correct image/font, reduce render-blocking CSS, and ship the element early.", "Do not preload every asset; priority mistakes compete with the LCP resource."], "Use p75 field data, segmented by device and connection. Protect the LCP budget during releases.", "A hero image is loaded late by CSS. Give a diagnosis and a safe fix plan.", ["vitals", "lcp", "timing"]),
+          q("Performance", "What causes poor INP, and how do you reduce it?", "Interaction work, main-thread scheduling, and event handler cost.", ["INP reflects the slowest important interaction across a page's lifetime, including handler, rendering, and presentation work.", "Break up long tasks, reduce synchronous work, avoid forced layout, and schedule non-urgent work after the interaction.", "Measure real interactions with field data and use traces to find the blocking task."], "Use list virtualization, incremental rendering, worker computation, and input-aware budgets where needed.", "Improve a search filter that freezes for 400 ms when a user types.", ["vitals", "inp"]),
+          q("Performance", "How do you prevent CLS during loading and interaction?", "Layout stability and reserved space.", ["Reserve dimensions for images, embeds, ads, and async content before they load.", "Avoid inserting content above existing content and coordinate font swaps with stable metrics.", "Separate user-initiated movement from unexpected layout shifts when analysing the metric."], "Track CLS by route and component. Treat late banners and cookie panels as product decisions with performance cost.", "Diagnose a page whose layout shifts when a web font and an image arrive together.", ["vitals", "cls"]),
+          q("Performance", "How do caching, images, fonts, and resource hints work together?", "Network priority, cache lifetime, and payload selection.", ["Use responsive images and modern formats, but preserve a useful fallback and correct dimensions.", "Set cache headers from asset mutability; immutable content can use long-lived caching with content hashes.", "Use `preload`, `preconnect`, or `fetchpriority` only for resources proven critical."], "Watch cache hit rate, transfer size, decode cost, and the effect on LCP and INP. Avoid font families and weights that the product does not need.", "Create an asset policy for a multi-region site with versioned static files.", ["html", "lcp", "vitals"]),
+          q("Design", "How would you use container queries or responsive CSS without duplicating components?", "Content-driven layout and stable component contracts.", ["A component should respond to the space it receives when its layout is local rather than page-specific.", "Keep semantic order and behavior stable while changing layout rules at thresholds.", "Use fluid sizing with clear minimums and test zoom, localization, and touch targets."], "Limit breakpoint rules and record the layout contract so designers and engineers share the same constraints.", "Design a card that works in a sidebar, a grid, and a full-width feed.", ["grid", "flex"]),
+          q("Security", "Explain the practical difference between CORS, cookies, and a content security policy.", "Browser security boundaries and safe deployment defaults.", ["CORS controls which origins may read cross-origin responses; it does not make a server endpoint private.", "Cookie attributes such as `HttpOnly`, `Secure`, and `SameSite` shape session exposure and request behavior.", "CSP limits executable and resource sources, reducing the impact of some injection bugs."], "Set policies from the threat model. Never use permissive origin reflection or treat CORS as authentication.", "Review a cross-origin session flow and identify the CSRF, cookie, and CORS decisions.", ["html", "aria"]),
+          q("Performance", "How do you combine lab tests, RUM, and the Performance APIs?", "Evidence quality, segmentation, and regression detection.", ["Lab tools reproduce a controlled scenario; RUM shows real users, devices, and network conditions.", "Use User Timing and Resource Timing to connect user-visible milestones to resources and code paths.", "Compare percentiles and segments, not only averages or a single synthetic run."], "Set route-level budgets and alert on p75 plus error and abandonment signals. Keep the same test scenario for before/after comparisons.", "Build a dashboard for a new checkout flow and choose the metrics that should page an engineer.", ["vitals", "timing"])
+        ]
+      },
+      {
+        id: "react",
+        title: "React",
+        kicker: "UI state, rendering, and server boundaries",
+        summary: "Show a precise model of render and commit, then choose state and data tools based on ownership and freshness.",
+        baseline: "React 17 → 18 → 19.2 · React Compiler 1.0 · TanStack Query v5",
+        questions: [
+          q("Concept", "What is the difference between render and commit in React?", "Purity, reconciliation, DOM mutation, and effect timing.", ["Render calculates the next UI tree and must remain pure; React may render more than once.", "Commit applies host mutations and runs the relevant layout and passive effect phases.", "Side effects in render can run twice, run for abandoned work, or produce inconsistent state."], "Keep expensive work measurable and pure. Use profiling to distinguish render cost from commit and browser layout cost.", "Find the bug in a component that writes to a global store while rendering.", ["react18"]),
+          q("Concept", "Why are keys important, and why is an array index often a poor key?", "Identity preservation and state placement.", ["Keys tell React which child is the same logical item across renders.", "Index keys change identity when items are inserted, removed, or reordered, which can move local state to the wrong row.", "Use a stable domain identifier that is unique in the rendered sibling set."], "Stable keys reduce unnecessary remounts and preserve focus, input, and animation state correctly.", "Explain the failure in an editable list that uses indexes as keys.", ["react18"]),
+          q("Debugging", "How should `useEffect` cleanup and dependency arrays be reasoned about?", "Synchronization with external systems, stale closures, and Strict Mode.", ["An effect synchronizes with something outside React; it is not a general-purpose lifecycle method.", "Dependencies describe the reactive values used by the effect, and cleanup must undo the setup.", "Development Strict Mode can run setup and cleanup in a probe cycle; code must remain idempotent."], "Abort requests, remove subscriptions, and avoid suppressing the lint rule to hide a missing dependency.", "Fix a chat subscription that shows a stale room after props change.", ["effects"]),
+          q("Concept", "What changed between React 17 and React 18 automatic batching?", "Root APIs, batching boundaries, and migration risk.", ["React 17 batches updates mainly inside React event handlers with the legacy root.", "React 18 with `createRoot` batches updates from promises, timeouts, and native events too.", "Use `flushSync` only for a measured integration that needs synchronous DOM visibility."], "Test assumptions around intermediate renders and third-party integrations during migration.", "Explain why a state read after two updates changes after switching from `render` to `createRoot`.", ["react18"]),
+          q("Concept", "What problem do transitions and deferred values solve?", "Priority, responsiveness, and interruptible rendering.", ["A transition marks non-urgent updates so urgent input can stay responsive.", "`useDeferredValue` lets a consumer lag behind a rapidly changing source without blocking the source update.", "They do not make slow work free; they change scheduling and user-visible priority."], "Use transitions around navigation, filtering, and expensive views. Keep correctness-critical updates urgent and observable.", "Add a transition to a large result list without making the input value lag.", ["react18"]),
+          q("Concept", "How does Suspense work with async rendering and streaming?", "Fallback boundaries, data ownership, and user-perceived progress.", ["A Suspense boundary shows a fallback while a child suspends through a supported data or code-loading mechanism.", "Nested boundaries let independent content stream or reveal progressively.", "Place boundaries around meaningful work and design fallbacks that preserve layout and context."], "Measure the boundary's effect on LCP and abandonment. Do not hide a persistent error behind an endless spinner.", "Choose Suspense boundaries for a dashboard with a fast shell and three slow panels.", ["react18", "react192"]),
+          q("Concept", "What do React 19 Actions, `useActionState`, and `useOptimistic` change?", "Async form workflows, pending state, and optimistic UI.", ["Actions provide a structured place for async mutations and pending or error state.", "`useActionState` returns state from an action; `useOptimistic` displays an expected result while work completes.", "The server remains the source of truth; reconcile failures and stale responses explicitly."], "Make mutations idempotent, expose accessible pending states, and keep optimistic updates reversible.", "Design an optimistic comment form that handles a rejected request and a duplicate submit.", ["react19"]),
+          q("Concept", "Where is the React Server Components boundary, and what can cross it?", "Server/client ownership, serializable props, and bundle cost.", ["Server Components run on the server and can access server-only resources; Client Components run where interactivity is needed.", "Props crossing the boundary must be serializable according to the framework's contract.", "Keep the client boundary low in the tree to reduce JavaScript and protect server-only code."], "Never send secrets or privileged data to the client. Treat serialization and caching as part of the API design.", "Split a product page into server data loading and a small client interaction island.", ["rsc", "reactSecurity"]),
+          q("Performance", "How does React Compiler affect manual memoization?", "Automatic memoisation, linting, and safe rollout.", ["The compiler can memoize compatible components and values based on analysis, reducing some manual `memo` and hook usage.", "It does not fix impure render code, unstable external systems, or poor data modelling.", "Use profiling and compiler diagnostics to roll out incrementally rather than deleting every existing optimization."], "Compare render counts and interaction latency before and after. Keep manual memoization when it protects a measured boundary or unsupported pattern.", "Plan a staged compiler rollout for a large React 17-compatible package.", ["compiler"]),
+          q("Design", "How do you choose between local state, context, a reducer, and Redux Toolkit?", "State ownership, update frequency, and domain boundaries.", ["Keep state local when one subtree owns it; lift it when siblings need the same source of truth.", "Context distributes stable dependencies but can cause broad re-renders when used as a high-frequency store.", "Use reducers or Redux Toolkit for explicit domain transitions, tooling, and cross-feature coordination."], "Separate server state from UI state. Normalize shared entities only when update and consistency needs justify it.", "Choose state ownership for a multi-step checkout with draft fields, server data, and payment status.", ["redux"]),
+          q("Concept", "What is the difference between client state and server state in TanStack Query?", "Freshness, ownership, cache lifecycle, and synchronization.", ["Server state is remote, shared, asynchronous, and can become stale outside the component.", "Client state belongs to the UI or local workflow and should not be forced into a request cache.", "TanStack Query manages fetching, caching, refetching, and mutation coordination rather than replacing every state store."], "Set freshness from product tolerance, not a default. Instrument cache misses, request waterfalls, and mutation error rates.", "Model filters, selected tab, and a remote patient list without duplicating the list in Redux.", ["tanstack"]),
+          q("Performance", "Explain `staleTime`, `gcTime`, structural sharing, and invalidation in TanStack Query v5.", "Cache semantics and memory versus freshness trade-offs.", ["`staleTime` controls when data becomes eligible for refetch; it does not delete data.", "`gcTime` controls how long unused cached data remains available for garbage collection.", "Invalidation marks related data stale and can trigger refetches based on observer and activity state."], "Choose query keys and invalidation scopes deliberately. Avoid refetch storms after a mutation by grouping related writes.", "Set policies for a slowly changing reference list and a real-time appointment feed.", ["tanstack", "queryClient"]),
+          q("Design", "How would you implement an optimistic mutation with TanStack Query?", "Consistency, rollback, and race handling.", ["Cancel or coordinate relevant fetches, snapshot previous data, update optimistically, and roll back on failure.", "Invalidate or reconcile the authoritative query after success so the cache reflects server rules.", "Handle duplicate submits, out-of-order responses, and partial failures."], "Use idempotency keys and server validation. Measure rollback frequency and stale-cache duration.", "Design optimistic reordering for a task board with two browser tabs.", ["queryClient", "tanstack"]),
+          q("Security", "What senior risks should you review in React Server Functions or RSC deployments?", "Threat modelling, dependency patching, and data boundaries.", ["Treat server functions as privileged endpoints with authentication, authorization, validation, and rate limits.", "Patch affected `react-server-dom-*` packages and review framework advisories rather than assuming server rendering is isolated.", "Do not serialize secrets or trust client-provided identity, tenant, or authorization fields."], "Add security tests, dependency gates, structured audit logs, and a rollback path for framework upgrades.", "Threat-model a server action that updates a patient's appointment and accepts a client-supplied ID.", ["reactSecurity", "rsc"])
+        ]
+      },
+      {
+        id: "nextjs",
+        title: "Next.js",
+        kicker: "App Router and full-stack React",
+        summary: "Explain rendering, caching, mutation, and deployment as one system instead of memorising isolated framework APIs.",
+        baseline: "Next.js 16.2 · App Router · Cache Components opt-in",
+        questions: [
+          q("Concept", "How do layouts, pages, loading UI, and error boundaries work in the App Router?", "File-system composition and route-level resilience.", ["Layouts persist across navigation while pages represent route content.", "Loading and error files define route-segment states and should preserve useful context.", "Use route groups and parallel or intercepted routes only when the information architecture requires them."], "Keep error recovery scoped, accessible, and observable. Do not make a global boundary hide a route-specific failure.", "Structure an authenticated dashboard with a persistent shell and independent loading states.", ["nextApp"]),
+          q("Concept", "How do Server and Client Components interact in Next.js?", "Boundary placement, serialization, and bundle ownership.", ["Server Components are the default in the App Router; Client Components opt in with `use client` for browser state or effects.", "A Client Component boundary pulls its imported module graph into the client bundle.", "Only serializable props should cross the boundary, and secrets must remain server-only."], "Place interactivity at leaves, load data on the server when safe, and use explicit DTOs between server and client.", "Convert a page with a date picker and private database query into a safe component tree.", ["nextApp", "rsc"]),
+          q("Concept", "What changed in Next.js 16 caching, and why are old implicit-cache answers risky?", "Version-aware rendering and cache intent.", ["Next.js 16 makes Cache Components and `use cache` explicit rather than relying on older implicit caching assumptions.", "Dynamic work can run at request time while selected components or functions are cached.", "Read the versioned docs and test cache behavior in production mode, not only development."], "Record freshness, invalidation, and personalization requirements in the design before adding a cache directive.", "Migrate a Next 14 page that assumed fetch caching to Next 16 with explicit cache intent.", ["next16", "nextPpr"]),
+          q("Scaling", "How do `use cache`, `cacheLife`, and cache tags work together?", "Cache keys, lifetime policy, and invalidation.", ["`use cache` marks a function or component as cacheable; cache inputs contribute to its key.", "`cacheLife` expresses a freshness and revalidation profile.", "Tags give a mutation path a way to invalidate related cached output without guessing URLs."], "Use stable keys, avoid caching request-specific secrets, and monitor hit rate, stale responses, and invalidation fan-out.", "Cache a product catalogue for five minutes but invalidate it immediately after an admin update.", ["nextCache", "nextPpr"]),
+          q("Performance", "How would you combine static rendering, dynamic rendering, streaming, and partial prerendering?", "Latency, freshness, and progressive delivery.", ["Render stable shells ahead of time, keep request-specific data dynamic, and stream slow portions behind Suspense boundaries.", "Partial prerendering can preserve an immediate shell while dynamic content arrives later.", "Choose based on user-visible latency and data freshness rather than a static-versus-dynamic label alone."], "Measure TTFB, LCP, stream completion, cache hit rate, and origin load under production traffic.", "Design a marketplace route with a static header, personalized cart, and slow recommendations.", ["nextApp", "nextPpr", "react192"]),
+          q("Performance", "What does Next.js prefetch during navigation, and when can it hurt?", "Navigation cache, network priority, and slow-device behavior.", ["`Link` and router behavior can prefetch route data or code when the framework decides it is useful.", "Prefetching improves perceived navigation but consumes bandwidth and server capacity.", "Tune or disable prefetch for large, low-probability destinations and verify dynamic route behavior."], "Measure navigation latency, prefetch hit rate, mobile data use, and origin request volume.", "A dashboard has 100 links in a table. Choose a safe prefetch policy.", ["nextApp", "nextUpgrade"]),
+          q("Security", "How do you secure a Server Action?", "Server-side authorization and mutation correctness.", ["Authenticate and authorize inside the action; never trust a hidden field or client-rendered permission.", "Validate input, enforce tenant ownership, protect against replay or duplicate submission, and return safe errors.", "Log actor, target, outcome, and correlation identifiers without logging secrets."], "Use idempotency keys, rate limits, audit records, and a transaction boundary for the state change.", "Review an action that accepts `userId` and `role` from a form and list every required guard.", ["nextApp", "owasp", "rfc"]),
+          q("Design", "When would you use a Route Handler instead of a Server Action?", "Protocol boundaries, clients, and HTTP semantics.", ["Use Route Handlers for public or machine-to-machine HTTP endpoints, webhooks, streaming, or non-React clients.", "Use Server Actions for tightly coupled UI mutations where the framework can manage the call path.", "Both require authentication, validation, rate limiting, observability, and clear status semantics."], "Document the contract with OpenAPI when external consumers or independent deployment teams depend on it.", "Choose the boundary for a payment provider webhook and an internal form submission.", ["nextApp", "rfc", "openapi"]),
+          q("Migration", "What Next.js 16 migration issues should a senior engineer check?", "Upgrade discipline and framework-version compatibility.", ["Review the upgrade guide for configuration, file convention, caching, and deprecated APIs.", "Validate `proxy.ts` and other renamed or removed conventions, plus runtime and Node version requirements.", "Run production builds and end-to-end tests because development mode can hide cache and streaming behavior."], "Use a canary deployment, compare RUM and origin metrics, and keep a rollback branch or release artifact.", "Plan an upgrade from Next 14 to 16 for a multi-tenant application with custom middleware.", ["nextUpgrade", "nextApp"]),
+          q("Performance", "How do you tune images, fonts, metadata, and route bundles in Next.js?", "Asset priority and framework-assisted delivery.", ["Give images dimensions and responsive sources, load only needed font weights, and keep metadata work out of the critical path where possible.", "Inspect the client bundle and move server-safe code out of Client Components.", "Use a performance trace to confirm that the change improves the LCP and does not regress INP."], "Use budgets for JavaScript, image bytes, and font bytes. Monitor field data by device class.", "Improve a page where a large client component owns the hero image and all metadata.", ["nextApp", "lcp", "vitals"]),
+          q("Scaling", "How do you operate a self-hosted Next.js App Router deployment with multiple instances?", "Shared cache state, routing, and consistency.", ["Treat application instances as replaceable and coordinate build artifacts, cache handlers, and invalidation across instances.", "Use a CDN or shared cache where appropriate, and ensure webhooks or mutations reach the same invalidation system.", "Keep session, file, and temporary state out of local disk unless the routing contract guarantees locality."], "Measure cache hit rate, origin load, invalidation delay, cold starts, and cross-region behavior.", "Design cache coordination for three regions and a rolling deployment.", ["nextSelfHost", "nextCache"]),
+          q("Security", "How should a Next.js team respond to an RSC security advisory?", "Patch management, threat scope, and safe rollout.", ["Identify affected packages and deployment paths, patch to a supported fixed version, and review whether untrusted payloads reached server-side decoders.", "Do not assume a client-only React application has the same exposure as an RSC or Server Function deployment.", "Communicate scope, mitigation, monitoring, and customer impact with evidence."], "Automate dependency and advisory checks. Keep a tested rollback and incident runbook for framework-level fixes.", "Write the first three actions after a critical RSC deserialization advisory is published.", ["reactSecurity", "nextUpgrade"]),
+          q("Behavioral", "Tell me about a Next.js architecture decision that you reversed.", "Learning, trade-off ownership, and operational feedback.", ["State the original assumption, the signal that disproved it, and the users or systems affected.", "Explain the smallest reversible migration and how you protected traffic during it.", "Share the design rule or measurement habit that prevents the same mistake."], "Senior answers include cache or rendering evidence, not only personal preference.", "Which metric would have revealed the wrong assumption earlier?", ["nextApp", "nextPpr"]),
+          q("Design", "How would you model observability for an App Router request that streams multiple data sources?", "Trace context, server/client spans, and user-visible milestones.", ["Propagate a request or trace identifier through route handling, data calls, and streamed boundaries.", "Record server timing, cache hit or miss, render phase, and client interaction milestones without logging sensitive payloads.", "Correlate errors from the server boundary with the client boundary and the user route."], "Use sampling based on errors and latency, then verify that instrumentation overhead stays within budget.", "Define the trace spans and metrics for a slow personalized dashboard route.", ["otel", "nextApp"])
+        ]
+      },
+      {
+        id: "python",
+        title: "Python APIs + ORM",
+        kicker: "Reliable services in Python",
+        summary: "Connect Python semantics to concurrency, framework lifecycle, validation, database behavior, and deployment.",
+        baseline: "Python 3.14 · Flask 3.1.x · FastAPI · SQLAlchemy 2.0",
+        questions: [
+          q("Concept", "What is the difference between identity, equality, mutability, and hashability in Python?", "Data model fundamentals and safe use of collections.", ["Identity asks whether two references point to the same object; equality asks whether values compare equal.", "Mutable objects can change after creation, while hashable objects must keep a stable hash during their lifetime.", "Keys in dictionaries and members of sets must obey the equality and hash contract."], "Use immutable value objects for keys and avoid exposing mutable internal collections across service boundaries.", "Explain why a mutable default or a mutable dictionary key creates a production bug.", ["pyModel"]),
+          q("Concept", "How do decorators, context managers, and generators support reusable service code?", "Composition, resource safety, and lazy evaluation.", ["Decorators wrap behavior around a callable; preserve metadata and make ordering explicit.", "Context managers pair setup and cleanup, including cleanup on exceptions.", "Generators produce values lazily and can reduce memory, but they still need cancellation and close semantics."], "Keep wrappers observable and small. Do not hide transactions, retries, or authorization behind surprising decorator order.", "Create a context manager for a database timing span and explain exception handling.", ["pyModel"]),
+          q("Concept", "How would you use `Protocol`, generics, and type narrowing in Python?", "Structural interfaces and static contracts.", ["`Protocol` describes the operations a value supports without requiring inheritance.", "Generics preserve relationships between inputs and outputs; type guards narrow unions when runtime checks prove a property.", "Static types do not validate incoming JSON or database rows at runtime."], "Keep runtime validation at boundaries and use protocols to make adapters testable without coupling to a concrete framework.", "Define a protocol for a storage adapter with synchronous and asynchronous test doubles.", ["pyTyping"]),
+          q("Concept", "How should a senior engineer explain the GIL and Python 3.14 free-threading?", "Version-aware concurrency and workload choice.", ["Default CPython builds still have GIL behaviour; optional free-threaded builds can run Python code across threads with compatibility and overhead trade-offs.", "I/O concurrency, CPU parallelism, process isolation, and extension-module support are separate decisions.", "Measure the workload and deployment target instead of repeating a blanket 'threads cannot run in parallel' claim."], "Choose asyncio, threads, processes, or a free-threaded build based on blocking profile, memory, library support, and operational complexity.", "Choose a concurrency model for image transforms and a separate model for 10,000 slow HTTP calls.", ["pyFree", "pyAsync"]),
+          q("Concept", "How does `asyncio.TaskGroup` change cancellation and failure handling?", "Structured concurrency and cleanup.", ["A task group scopes child tasks and propagates failure so the parent can handle a coherent result.", "Cancellation is a control signal; cleanup belongs in `finally`, and swallowed cancellation can break shutdown.", "Bound concurrency and timeouts around external calls; do not create unbounded tasks from request input."], "Record task cancellation and queue saturation. Make shutdown drain or cancel work within a clear deadline.", "Design a fan-out request that calls five services but cancels the rest when one critical dependency fails.", ["pyAsync"]),
+          q("Design", "Why use a Flask app factory and blueprints?", "Configuration isolation, testability, and modular routing.", ["An app factory creates the application after configuration and extensions are known.", "Blueprints group routes and related behavior without creating a second application object.", "The pattern supports multiple instances, test configuration, and clean import boundaries."], "Avoid module-level database connections and hidden configuration. Validate the factory with a production-like test app.", "Set up separate test and production apps with the same extension registration code.", ["flaskFactory", "flaskBlueprint"]),
+          q("Performance", "What are Flask's async limitations under a WSGI deployment?", "Concurrency model, worker economics, and framework fit.", ["An async view can await I/O, but a traditional WSGI worker still handles one request per worker at a time.", "Async can help with concurrent I/O inside the request but does not turn CPU work into parallel work.", "Use an ASGI deployment or a different service shape when long-lived concurrency is central."], "Choose worker count and process model from measured latency, memory, and downstream limits. Do not create background tasks that die when the request ends.", "Decide whether Flask, an ASGI adapter, or FastAPI fits a long-polling endpoint.", ["flaskAsync", "flaskDeploy"]),
+          q("Concept", "How do FastAPI's sync and async endpoints affect concurrency?", "Threadpool boundaries and blocking work.", ["Async endpoints should await non-blocking libraries; blocking calls inside them can stall the event loop.", "Sync endpoints can run in a threadpool, but threads still consume memory and compete for downstream resources.", "Choose libraries and endpoint style together, then measure queue and service time."], "Bound threadpool and database pool sizes. Isolate CPU-heavy work in a worker or process.", "Review an async endpoint that calls a blocking SDK and propose two safe fixes.", ["fastapiAsync", "pyAsync"]),
+          q("Design", "How do FastAPI dependencies and lifespan events improve a service?", "Dependency scopes, resource lifecycle, and test seams.", ["Dependencies compose authentication, configuration, database sessions, and request-scoped services.", "Lifespan setup and teardown owns resources such as clients, pools, and model loads.", "Override dependencies in tests instead of reaching into global state."], "Close clients and pools on shutdown. Expose health and readiness based on dependency state, not only process liveness.", "Create a request-scoped database session and a shared HTTP client with deterministic shutdown.", ["fastapiDi", "fastapiLife"]),
+          q("Security", "How should Pydantic v2 models handle strictness, coercion, and extra fields?", "Runtime validation, compatibility, and data trust.", ["Pydantic validates and serializes runtime data; type annotations alone do not.", "Choose strict or coercive fields based on the contract and threat model, and define an explicit extra-field policy.", "Use separate request, domain, and response models when accepting and returning different shapes."], "Reject ambiguous identifiers and dangerous coercion at security boundaries. Measure validation cost for large payloads.", "Design request and response models for an API that accepts numeric IDs but must not accept floats silently.", ["pydantic"]),
+          q("Concept", "What is the correct SQLAlchemy Session scope, and what does `AsyncSession` change?", "Unit of work, transaction ownership, and concurrency safety.", ["A Session tracks identity and transaction state for a unit of work; it is not a global cache.", "Use one Session per thread or request and one AsyncSession per concurrent task; do not share it across unrelated work.", "Commit or roll back at an explicit boundary and close the session deterministically."], "Keep pool size, request concurrency, and transaction duration aligned. Record slow transactions and connection exhaustion.", "Design a request lifecycle that rolls back on an exception and never leaks a connection.", ["sqlalchemySession"]),
+          q("Performance", "How do you diagnose and fix an ORM N+1 query?", "Loader strategies, query shape, and measurement.", ["N+1 happens when a parent query triggers one lazy query per child access.", "Use eager loading or explicit joins based on the access pattern, then inspect the generated SQL.", "Do not blindly eager-load every relationship; it can create row explosion and memory cost."], "Set query-count tests for critical paths and monitor database time, rows returned, and pool wait.", "Fix a list endpoint that returns 100 patients and makes 101 database queries.", ["sqlalchemyQuery"]),
+          q("Design", "How do transactions, isolation, and migrations affect a Python API?", "Database correctness under concurrency and deployment change.", ["A transaction groups changes; isolation controls which concurrent states a transaction can observe.", "Choose the smallest transaction that protects the invariant and handle serialization or deadlock retries deliberately.", "Migrations must be backward-compatible across the deploy window when old and new code overlap."], "Use expand-and-contract changes, indexes validated against query plans, and an idempotent retry strategy.", "Add a non-null column to a large table with zero-downtime deploys.", ["sqlalchemySession", "sqlalchemyQuery"]),
+          q("Deployment", "How would you run and observe Flask or FastAPI in production?", "Worker model, health, saturation, and safe operations.", ["Choose WSGI or ASGI workers, process count, thread or event-loop strategy, and timeouts from workload measurements.", "Separate liveness from readiness and expose dependency failures without leaking secrets.", "Track request p95/p99, error rate, saturation, queue time, pool wait, and deployment version."], "Use graceful shutdown, bounded queues, structured logs, traces, and a canary or rolling release.", "Set a rollback trigger for a release that raises latency but not error rate.", ["flaskDeploy", "fastapiLife", "otel"])
+        ]
+      },
+      {
+        id: "full-stack",
+        title: "Full-stack engineering",
+        kicker: "Contracts, systems, and ownership",
+        summary: "Connect browser behavior, APIs, data, security, operations, and delivery into a coherent production design.",
+        baseline: "HTTP Semantics · OpenAPI 3.1 · OWASP ASVS 5 · OpenTelemetry",
+        questions: [
+          q("Design", "How would you design an HTTP API that is predictable for clients and safe to retry?", "Resource modelling, status semantics, idempotency, and evolution.", ["Choose resource names, methods, status codes, and representations from HTTP semantics rather than a verb-shaped URL habit.", "Define idempotency for create and mutation operations, including duplicate and timeout behavior.", "Return stable error shapes with correlation identifiers and document conditional requests where useful."], "Use idempotency keys, server-side deduplication, timeouts, and metrics for retries and conflicts.", "Design a payment capture endpoint that may receive the same request three times.", ["rfc", "openapi"]),
+          q("Design", "What does contract-first API design add, and how do you keep an OpenAPI contract honest?", "Consumer compatibility, validation, and generated tooling.", ["An OpenAPI contract makes request, response, error, and security expectations reviewable before implementation.", "Validate both provider and consumer behavior; generated types do not replace runtime validation.", "Version only when compatibility requires it, and deprecate fields with a migration window."], "Run contract tests in CI and compare production traffic to the declared schema without logging sensitive payloads.", "Plan a backward-compatible change from a scalar field to a richer object.", ["openapi", "rfc"]),
+          q("Security", "How do authentication and authorization differ in a multi-tenant application?", "Identity, permission, and tenant isolation.", ["Authentication establishes who or what is acting; authorization decides what that identity may do.", "Tenant and resource ownership must be checked server-side for every sensitive operation.", "A valid token is not proof that the requested resource belongs to the caller."], "Centralize policy primitives, audit decisions, and test cross-tenant access as a first-class failure mode.", "Review an endpoint that accepts `tenantId` in the URL and a user token in a header.", ["owasp", "rfc"]),
+          q("Security", "How do you defend a full-stack application against XSS, CSRF, SQL injection, and unsafe CORS?", "Layered web security and trust boundaries.", ["Encode output by context, validate inputs, use parameterized queries, and treat every client value as untrusted.", "Use CSRF defenses for cookie-authenticated state changes and configure cookie attributes intentionally.", "CORS controls browser reads; it does not authorize API callers or replace authentication."], "Use a security verification baseline, dependency updates, CSP where suitable, and negative tests for each boundary.", "Threat-model a single-page app that uses an HTTP-only session cookie and a separate API origin.", ["owasp", "html", "rfc"]),
+          q("Design", "When should a workflow use one database transaction, an outbox, or a saga?", "Consistency boundaries and distributed failure.", ["Use one transaction when the invariant belongs to one database boundary.", "Use an outbox to atomically record a state change and a message for later delivery.", "Use a saga or compensating actions when a workflow crosses independently owned services."], "Make messages idempotent, observable, and replayable. Document which states are temporary and which are final.", "Design order creation plus email and inventory reservation without a distributed transaction.", ["rfc", "openapi", "otel"]),
+          q("Performance", "How do you use indexes and query plans to scale a data-heavy endpoint?", "Access patterns, selectivity, and database evidence.", ["Start from the filter, sort, join, and projection pattern; then validate with the database query plan.", "Use a covering or composite index only when it matches real access patterns and write cost is acceptable.", "Paginate by a stable cursor for large or changing result sets instead of relying on deep offsets."], "Monitor rows examined, latency, lock time, and index size. Re-check plans after data distribution changes.", "Improve a feed query that sorts millions of rows by timestamp and has frequent inserts.", ["sqlalchemyQuery", "rfc"]),
+          q("Scaling", "How do you design a cache without serving unsafe or permanently stale data?", "Cache keys, invalidation, and consistency.", ["Define what may be cached, for whom, for how long, and which writes invalidate it.", "Include tenant, locale, permission, and representation dimensions in the key where relevant.", "Use stale-while-revalidate or a bounded fallback only when product behavior permits it."], "Measure hit rate, origin load, stale age, stampedes, and invalidation delay. Use request coalescing for hot keys.", "Design caching for a public catalogue and a private per-user dashboard.", ["rfc", "nextCache"]),
+          q("Scaling", "How should retries, queues, and backpressure work together?", "Failure amplification and bounded work.", ["Retry only transient failures, with exponential backoff, jitter, a maximum attempt count, and an idempotency strategy.", "Queues absorb short bursts but do not remove capacity limits or downstream failure.", "Backpressure should be visible: reject, defer, or shed work before memory and latency become unbounded."], "Track queue age, depth, retry rate, dead letters, and consumer saturation. Provide a replay and poison-message process.", "Design an image-processing queue that must not duplicate a charge or exhaust worker memory.", ["rfc", "otel"]),
+          q("Operations", "What should a useful full-stack trace contain?", "End-to-end correlation and actionable telemetry.", ["Propagate trace context from browser or edge through API, queue, database, and downstream calls.", "Record operation names, latency, status, cache decisions, and sampled attributes without sensitive payloads.", "Link logs and metrics to the same trace or request identifier."], "Use tail or error-aware sampling and check instrumentation overhead. Make the trace answer 'where did the time go?'", "Define the spans for a checkout request that touches a browser, API, database, and payment provider.", ["otel"]),
+          q("Operations", "How do you define an SLO and respond to an incident?", "User impact, error budgets, and operational decisions.", ["Choose a user-visible success measure, target, time window, and valid exclusions.", "Use the error budget to guide release risk and prioritise reliability work.", "During an incident, stabilise first, communicate facts and uncertainty, then investigate and document follow-up actions."], "Alert on burn rate and symptoms, not every low-level event. Keep rollback, mitigation, and ownership clear.", "Set an SLO for appointment booking and describe the alert that should wake the team.", ["otel", "rfc"]),
+          q("Testing", "How do unit, integration, contract, end-to-end, and load tests complement each other?", "Confidence by boundary and feedback speed.", ["Unit tests isolate pure logic; integration tests exercise real boundaries; contract tests protect provider-consumer agreement.", "End-to-end tests cover a small set of critical journeys; load tests validate capacity assumptions.", "A passing test suite is not proof of safe authorization, data migration, or production observability."], "Use production-like data shapes, deterministic clocks where needed, and failure injection for dependencies.", "Choose the minimum test set for a new cross-service booking workflow.", ["openapi", "owasp", "rfc"]),
+          q("Delivery", "How would you release a risky full-stack change safely?", "Change management, compatibility, and rollback.", ["Use backward-compatible schema and API steps, feature flags, canaries, or staged rollout where the risk warrants it.", "Define success and rollback signals before deployment.", "Keep migrations and code deployable independently when old and new versions overlap."], "Compare latency, error rate, conversion, queue age, and data correctness before increasing exposure.", "Roll out a new search index and API response shape to one percent of traffic.", ["openapi", "otel"]),
+          q("Scaling", "How do you decide when to scale vertically, horizontally, or asynchronously?", "Capacity modelling and trade-off selection.", ["Vertical scaling is simple but has a ceiling; horizontal scaling needs statelessness, coordination, and a load-balancing plan.", "Asynchronous work protects request latency when users do not need an immediate result.", "Base the choice on a bottleneck, cost curve, failure mode, and user promise."], "Use saturation signals and capacity tests. Avoid scaling a layer that is waiting on a smaller downstream pool.", "Choose a scaling strategy for a report endpoint that consumes 30 seconds of CPU and is requested 100 times per minute.", ["k8sHpa", "otel"]),
+          q("Behavioral", "Tell me about a cross-functional trade-off where you changed the technical plan.", "Product judgement, communication, and responsible compromise.", ["State the user or business outcome, the technical constraints, and the alternatives considered.", "Explain how you made risk visible and chose a reversible or staged decision where possible.", "Describe the result and the evidence that changed future planning."], "Senior engineers connect architecture to user impact, delivery risk, operations, and team learning.", "What would you document so the next team does not repeat the debate?", ["openapi", "otel"])
+        ]
+      }
+    ];
+
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    }[character]));
+    const inline = (value) => escapeHtml(value).replace(/`([^`]+)`/g, "<code>$1</code>");
+    const guideSections = document.getElementById("guide-sections");
+    const sourceGrid = document.getElementById("source-grid");
+    const search = document.getElementById("search");
+    const matchCount = document.getElementById("match-count");
+
+    const sourceLinks = (ids) => ids.map((id) => {
+      const source = sourceMap[id];
+      return source ? `<a href="${source[1]}" target="_blank" rel="noreferrer">${inline(source[0])}</a>` : "";
+    }).join("");
+
+    const renderGuide = () => {
+      guideSections.innerHTML = guideData.map((section) => `
+        <details class="topic-section" id="${section.id}" data-topic="${section.id}">
+          <summary>
+            <span><span class="section-kicker">${inline(section.kicker)}</span><span class="section-title">${inline(section.title)}</span></span>
+            <span class="section-count">${section.questions.length} questions</span>
+            <span class="section-summary">${inline(section.summary)} <span class="section-count">${inline(section.baseline)}</span></span>
+          </summary>
+          <div class="topic-body">
+            <div class="question-list">
+              ${section.questions.map((question, index) => `
+                <details class="question-card" data-topic="${section.id}" data-mode="${question.mode.toLowerCase()}" data-level="senior" data-search="${escapeHtml([question.question, question.tests, question.answer.join(" "), question.scale, question.followUp, section.title, section.kicker].join(" "))}">
+                  <summary>
+                    <span class="question-number">${String(index + 1).padStart(2, "0")}</span>
+                    <span class="question-title">${inline(question.question)}</span>
+                    <span class="mode">${inline(question.mode)}</span>
+                  </summary>
+                  <div class="question-body">
+                    <section><h4>What it tests</h4><p>${inline(question.tests)}</p></section>
+                    <section><h4>Senior answer points</h4><ul>${question.answer.map((point) => `<li>${inline(point)}</li>`).join("")}</ul></section>
+                    <section><h4>Production and scaling angle</h4><p>${inline(question.scale)}</p></section>
+                    <section><h4>Follow-up prompt</h4><p class="follow-up">${inline(question.followUp)}</p></section>
+                    <section><h4>Primary references</h4><div class="source-list">${sourceLinks(question.sources)}</div></section>
+                  </div>
+                </details>
+              `).join("")}
+            </div>
+          </div>
+        </details>
+      `).join("");
+    };
+
+    const renderSources = () => {
+      sourceGrid.innerHTML = Object.entries(sourceMap).map(([id, source]) => `<li><a href="${source[1]}" target="_blank" rel="noreferrer">${inline(source[0])}</a></li>`).join("");
+    };
+
+    const cards = () => [...document.querySelectorAll(".question-card")];
+    const sections = () => [...document.querySelectorAll(".topic-section")];
+    const resetCollapsed = () => {
+      sections().forEach((section) => { section.open = false; section.hidden = false; });
+      cards().forEach((card) => { card.open = false; card.hidden = false; });
+    };
+
+    const applyFilter = () => {
+      const term = search.value.trim().toLowerCase();
+      if (!term) {
+        resetCollapsed();
+        matchCount.textContent = `${cards().length} questions`;
+        return;
+      }
+      let matches = 0;
+      sections().forEach((section) => {
+        const sectionCards = [...section.querySelectorAll(".question-card")];
+        let sectionMatches = 0;
+        sectionCards.forEach((card) => {
+          const isMatch = card.dataset.search.toLowerCase().includes(term) || card.dataset.mode.includes(term) || card.dataset.topic.includes(term);
+          card.hidden = !isMatch;
+          card.open = false;
+          if (isMatch) { sectionMatches += 1; matches += 1; }
+        });
+        section.hidden = sectionMatches === 0;
+        section.open = sectionMatches > 0;
+      });
+      matchCount.textContent = `${matches} matching question${matches === 1 ? "" : "s"}`;
+    };
+
+    renderGuide();
+    renderSources();
+    resetCollapsed();
+    search.addEventListener("input", applyFilter);
+    document.getElementById("expand-all").addEventListener("click", () => {
+      sections().filter((section) => !section.hidden).forEach((section) => { section.open = true; });
+      cards().filter((card) => !card.hidden).forEach((card) => { card.open = true; });
+    });
+    document.getElementById("collapse-all").addEventListener("click", () => {
+      sections().forEach((section) => { section.open = false; });
+      cards().forEach((card) => { card.open = false; });
+    });
+    document.querySelectorAll('.toc-list a[href^="#"]').forEach((link) => {
+      link.addEventListener("click", (event) => {
+        const targetId = link.getAttribute("href").slice(1);
+        const target = document.getElementById(targetId);
+        if (!target) return;
+        if (search.value) { search.value = ""; applyFilter(); }
+        if (target.tagName === "DETAILS") target.open = true;
+        event.preventDefault();
+        target.scrollIntoView({ block: "start" });
+        target.querySelector("summary")?.focus({ preventScroll: true });
+      });
+    });
+  </script>
+</body>
+</html>
