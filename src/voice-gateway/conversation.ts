@@ -244,18 +244,53 @@ function matchesTimePreference(slotTime: string, preference: string) {
   return slotTime.toLowerCase().includes(normalized) || normalized.includes(normalizedSlot);
 }
 
+function normalizeCallerText(callerText: string) {
+  return callerText
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, "'")
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ");
+}
+
+export function isNegativeUtterance(callerText: string) {
+  const text = normalizeCallerText(callerText);
+  if (/^(no|nope|nah|not now|never)$/.test(text)) return true;
+  if (/^(no|nope|nah)[, ]/.test(text)) return true;
+  if (/\b(not (me|oliver|olivia)|wrong (person|number)|do not want|don't want|not okay|not ok)\b/.test(text)) {
+    return true;
+  }
+  return /^(that is not correct|that's not correct)$/.test(text);
+}
+
+export function isAffirmativeUtterance(callerText: string) {
+  const text = normalizeCallerText(callerText);
+  if (isNegativeUtterance(text)) return false;
+  if (/^(yes|yeah|yep|yup|yea|ok|okay|sure|correct|right|alright|fine|agreed|absolutely|please)$/.test(text)) {
+    return true;
+  }
+  if (/^(yes|yeah|yep|yup|yea|ok|okay|sure)[, ]/.test(text)) return true;
+  if (/^(sounds good|that works|that's fine|thats fine|that's good|that's correct|that is correct|go ahead|go for it|that's me|thats me)$/.test(text)) {
+    return true;
+  }
+  if (/\b(sounds good|that works|go ahead|that's fine|thats fine)\b/.test(text)) return true;
+  return /\b(ok|okay|yes|yeah|fine|sure|good)\b/.test(text) && /\b(26th|26|twenty ?six)\b/.test(text);
+}
+
 export function classifyLocalVoiceIntent(
   state: VoiceConversationState,
   callerText: string,
 ): VoiceIntent | undefined {
-  const text = callerText.trim().toLowerCase().replace(/[.!?]+$/g, "");
-  const yes = /^(yes|yes,? .+|correct|that is correct|that's correct|sounds good|okay|ok)$/i.test(text);
-  const no = /^(no|nope|not now|that is not correct|that's not correct)$/i.test(text);
+  const text = normalizeCallerText(callerText);
+  const yes = isAffirmativeUtterance(text);
+  const no = isNegativeUtterance(text);
 
   if (/\b(cancel|cancel it|cancel the appointment)\b/i.test(text)) return blankIntent("cancel");
 
   if (state.phase === "verify_identity") {
-    if (yes || /\b(this is|speaking|i am) olivia\b/i.test(text)) return blankIntent("identity_confirmed");
+    if (yes || /\b(that's me|thats me|speaking)\b/.test(text) || /\b(this is|i am|i'm) (olivia|oliver)\b/.test(text)) {
+      return blankIntent("identity_confirmed");
+    }
     if (no || /\bwrong (person|number)\b/i.test(text)) return blankIntent("identity_denied");
   }
 

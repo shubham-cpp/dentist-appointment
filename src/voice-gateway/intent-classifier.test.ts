@@ -33,7 +33,7 @@ const context = createVoiceCallContext(new Date("2026-08-16T16:00:00.000Z"));
 const offeredSlotIds = context.availableSlots.filter((slot) => slot.provider.id === "patel").slice(0, 3).map((slot) => slot.id);
 const offeredState = { ...createVoiceConversationState(), offeredSlotIds, phase: "offer_slots" as const };
 
-test("uses structured output with explicit Terra medium-effort options", async () => {
+test("uses structured output with explicit Terra low-effort options", async () => {
   const model = modelWithOutput({
     intent: "select_slot",
     requestedDate: "",
@@ -55,7 +55,7 @@ test("uses structured output with explicit Terra medium-effort options", async (
   assert.deepEqual(model.doStreamCalls[0]?.providerOptions?.openai, {
     parallelToolCalls: false,
     reasoningContext: "all_turns",
-    reasoningEffort: "medium",
+    reasoningEffort: "low",
     store: false,
   });
   assert.match(JSON.stringify(model.doStreamCalls[0]?.prompt), /America\/New_York/);

@@ -44,6 +44,17 @@ test("handles clear short answers without Terra", () => {
   const initial = createVoiceConversationState();
   assert.equal(classifyLocalVoiceIntent(initial, "Yes")?.intent, "identity_confirmed");
   assert.equal(classifyLocalVoiceIntent(initial, "Yes, this is Olivia")?.intent, "identity_confirmed");
+  assert.equal(classifyLocalVoiceIntent(initial, "Yeah I'm Olivia")?.intent, "identity_confirmed");
+  assert.equal(classifyLocalVoiceIntent(initial, "That's me")?.intent, "identity_confirmed");
+  assert.equal(classifyLocalVoiceIntent(initial, "Yep")?.intent, "identity_confirmed");
+});
+
+test("handles spoken confirmation paraphrases without Terra", () => {
+  const state = { ...createVoiceConversationState(), phase: "confirm_reschedule" as const };
+  assert.equal(classifyLocalVoiceIntent(state, "Sure")?.intent, "confirm");
+  assert.equal(classifyLocalVoiceIntent(state, "Go ahead")?.intent, "confirm");
+  assert.equal(classifyLocalVoiceIntent(state, "Okay understandable, I'm ok with the 26th")?.intent, "confirm");
+  assert.equal(classifyLocalVoiceIntent(state, "No")?.intent, "decline");
 });
 
 test("uses the agreed third-failure message", () => {

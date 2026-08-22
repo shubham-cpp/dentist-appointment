@@ -10,6 +10,10 @@
     "lint": "eslint",
     "test:twilio": "node --env-file=.env.local scripts/test-twilio-call.mjs",
     "test:twilio:unit": "node --test scripts/test-twilio-call.test.mjs",
+    "test:telnyx": "node --env-file=.env.local scripts/test-telnyx-call.mjs",
+    "test:telnyx:unit": "node --test scripts/test-telnyx-call.test.mjs",
+    "test:telnyx:conversation": "node --env-file=.env.local scripts/test-telnyx-conversation.mjs",
+    "test:telnyx:conversation:unit": "node --test scripts/test-telnyx-conversation.test.mjs",
     "test:voice": "tsx --test src/voice-gateway/*.test.ts src/lib/controlled-voice-polling.test.ts src/lib/voice-call-context.test.ts",
     "voice:dev": "node --env-file=.env.local --import tsx --watch src/voice-gateway/server.ts",
     "voice:preflight": "node --env-file=.env.local --env-file=.voice-preflight.env --import tsx src/voice-gateway/preflight.ts"

@@ -106,7 +106,7 @@ export function createStructuredVoiceIntentClassifier(
         openai: {
           parallelToolCalls: false,
           reasoningContext: "all_turns",
-          reasoningEffort: "medium",
+          reasoningEffort: "low",
           store: false,
         } satisfies OpenAIResponsesProviderOptions,
       },
