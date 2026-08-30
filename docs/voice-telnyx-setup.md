@@ -1,6 +1,6 @@
 # Telnyx isolated voice tests
 
-Use these steps before any Telnyx `--confirm` call. The live Twilio demo on port 3001 stays unchanged.
+Use these steps to create the Telnyx account objects for the live dashboard demo and for `pnpm test:telnyx`.
 
 Official sources:
 
@@ -30,18 +30,71 @@ Current portal routes:
    Paid status needs a verified phone number, service address, 2FA, and a credit-card payment.
 4. Create an API key from `/#/api-keys`. Put it in `TELNYX_API_KEY`. Do not commit it.
    Telnyx shows a new API key only once.
-5. Use the API key to call `GET https://api.telnyx.com/v2/whoami`.
+5. Copy the account public key from `/#/api-keys`. Put it in `TELNYX_PUBLIC_KEY`.
+   The gateway uses it to check Ed25519 webhook signatures.
+6. Use the API key to call `GET https://api.telnyx.com/v2/whoami`.
    Put the returned `organization_id` in `TELNYX_ACCOUNT_SID`.
-6. Create an Outbound Voice Profile at `/#/outbound-profiles`.
+7. Create an Outbound Voice Profile at `/#/outbound-profiles`.
    Enable the country of `CALL_TO_NUMBER`. Enable India if that number is `+91`.
-7. Create or edit a TeXML Application at `/#/call-control/texml`.
+8. Create or edit a TeXML Application at `/#/call-control/texml`.
    Attach the Outbound Voice Profile. Copy the Application ID into `TELNYX_APPLICATION_SID`.
-8. Buy a Voice number from `/#/voice/my-numbers/buy`.
+9. Buy a Voice number from `/#/voice/my-numbers/buy`.
    Put it in `TELNYX_PHONE_NUMBER`.
-9. Assign the Voice number to the TeXML Application.
-10. Keep `CALL_TO_NUMBER` as your own test phone. Do not use a patient number.
+10. Assign the Voice number to the TeXML Application.
+11. Keep `CALL_TO_NUMBER` as your own test phone. Do not use a patient number.
 
 Copy the Telnyx names from [voice-demo.env.example](voice-demo.env.example) into `.env.local`.
+
+## Managed assistant model
+
+The managed scheduling assistant uses `openai/gpt-5.6-luna`.
+
+Telnyx requires an integration-secret identifier for third-party models.
+Use a paid OpenAI API key. Put it in `TELNYX_OPENAI_API_KEY` in `.env.local`.
+Do not put the key in `.voice-preflight.env`.
+
+The approved provisioning command performs these actions:
+
+1. Verify that Telnyx lists `openai/gpt-5.6-luna`.
+2. Create or reuse the named OpenAI integration secret.
+3. Create or reuse the scheduling tools.
+4. Compare the full approved assistant settings with the main version.
+5. Promote a version only when the approved settings differ.
+6. Verify the resolved tool names when Telnyx omits `tool_ids`.
+7. Record the previous version for rollback.
+
+```bash
+pnpm voice:assistant:provision -- --confirm
+pnpm test:telnyx:assistant-chat -- --verify
+pnpm test:telnyx:assistant-call -- --verify
+```
+
+The two verification commands are read-only. They do not place a call.
+The provisioning command does not place a call.
+
+The approved voice profile uses Deepgram Flux.
+It sets `eager_eot_threshold` to `0.3`.
+It sets the speaking wait and endpoint values to `0.1` seconds.
+It also enables message-history callbacks for the local diagnostic report.
+
+Keep `pnpm dev` running before the confirmed isolated call.
+
+```bash
+pnpm test:telnyx:assistant-call -- --confirm
+```
+
+The command writes one report to `.voice-logs/telnyx-assistant-call-<run-id>.json`.
+The report contains the transcript, call events, and timing proxies.
+It does not contain phone numbers or call identifiers.
+History timestamps do not measure audio arrival at the phone.
+
+Official references:
+
+- [Create an assistant](https://developers.telnyx.com/api-reference/assistants/create-an-assistant)
+- [Update an assistant](https://developers.telnyx.com/api-reference/assistants/update-an-assistant)
+- [Create an integration secret](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret)
+- [OpenAI integration](https://developers.telnyx.com/docs/inference/ai-assistants/no-code-voice-assistant)
+- [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
 
 ## How the outbound call is created
 
@@ -90,7 +143,7 @@ Scripted lines (see `AGENT_LINES` in the script for the exact wording):
 4. You agree. Local matcher handles “I'm ok with the 26th” and similar.
 5. Agent says the visit is rescheduled, waits for playback, then hangs up.
 
-Unclear leftovers still go to Terra with `reasoningEffort: "low"`. The model does not invent dates. Sandbox phrases (Oliver, 26th) are demo-only. The product matcher must use the live patient name and offered times.
+Unclear leftovers in this isolated script still use its own legacy settings. The dashboard gateway uses `gpt-5.6-luna-fast` with `reasoningEffort: "none"`. The model does not invent dates. Sandbox phrases (Oliver, 26th) are demo-only. The product matcher uses the live patient name and offered times.
 
 Current architecture: [research/telnyx-sandbox-current-architecture.md](research/telnyx-sandbox-current-architecture.md).
 
@@ -105,7 +158,7 @@ If the proxy is already running (`pnpm dev`), the script reuses it and does not 
 
 If `pnpm dev` already has ngrok on port 3001, this script tries to add a second tunnel to that agent. A free ngrok account often allows only one tunnel. In that case stop `pnpm dev`, or run `ngrok http 3002` yourself and use `--no-ngrok` with `TELNYX_PUBLIC_BASE_URL`.
 
-`--verify` checks a local confirm on “Yeah I'm Oliver”, then one leftover phrase through Terra (`reasoning=low`). Local should be near 0 ms. If the model sample is still thousands of ms, that is leftover-only cost.
+`--verify` checks a local confirm on “Yeah I'm Oliver”, then one model fallback. Local should be near 0 ms. If the model sample is still thousands of ms, that is fallback-only cost.
 
 Use `--skip-proxy` only when you already run claude-code-proxy yourself.
 

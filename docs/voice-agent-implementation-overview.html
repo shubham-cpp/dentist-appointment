@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A plain-language overview of the voice-agent implementations in the dentist management system.">
+  <title>Voice-agent implementation overview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --nav: #0d2850;
+      --nav-deep: #081d3c;
+      --primary: #1268e8;
+      --primary-hover: #0d56c5;
+      --canvas: #f3f6f9;
+      --surface: #ffffff;
+      --surface-subtle: #f8fafc;
+      --text: #152238;
+      --muted: #5f6f82;
+      --border: #dce3ea;
+      --border-strong: #c9d3de;
+      --teal: #0b8f86;
+      --teal-soft: #e1f5f2;
+      --amber: #a76504;
+      --amber-soft: #fff2d7;
+      --danger: #b33838;
+      --danger-soft: #fce8e8;
+      --focus: #83b4fa;
+      --measure: 74ch;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--text);
+      font-family: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--primary-hover);
+      text-underline-offset: 0.18em;
+    }
+
+    a:hover {
+      color: var(--nav);
+    }
+
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      border-radius: 0.25rem;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 0.5rem;
+      left: 0.5rem;
+      z-index: 10;
+      padding: 0.55rem 0.75rem;
+      background: var(--surface);
+      color: var(--nav);
+      border: 1px solid var(--border-strong);
+      border-radius: 0.375rem;
+      transform: translateY(-150%);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .page-header {
+      background: var(--nav);
+      color: var(--surface);
+      border-bottom: 4px solid var(--primary);
+    }
+
+    .page-header-inner,
+    main,
+    .page-footer {
+      width: min(100% - 2rem, 74rem);
+      margin-inline: auto;
+    }
+
+    .page-header-inner {
+      padding: 2.5rem 0 2rem;
+    }
+
+    .page-header h1 {
+      max-width: 18ch;
+      margin: 0;
+      font-size: 1.875rem;
+      line-height: 1.08;
+      letter-spacing: -0.025em;
+    }
+
+    .page-header p {
+      max-width: 62ch;
+      margin: 1rem 0 0;
+      color: var(--surface);
+      font-size: 1.1rem;
+    }
+
+    .snapshot {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-strong);
+      color: var(--surface);
+      font-size: 0.875rem;
+    }
+
+    main {
+      padding: 2rem 0 4rem;
+    }
+
+    .status-summary {
+      display: grid;
+      grid-template-columns: 10rem 1fr;
+      gap: 1rem;
+      padding: 1.25rem;
+      background: var(--amber-soft);
+      border: 1px solid var(--amber);
+      border-radius: 0.5rem;
+    }
+
+    .status-summary strong {
+      color: var(--text);
+    }
+
+    .status-summary p {
+      max-width: var(--measure);
+      margin: 0;
+    }
+
+    nav {
+      margin-top: 2rem;
+      padding: 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+    }
+
+    nav h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+    }
+
+    nav ol {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem 1.5rem;
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    section {
+      padding-top: 3rem;
+    }
+
+    section + section {
+      margin-top: 3rem;
+      border-top: 1px solid var(--border-strong);
+    }
+
+    h2,
+    h3 {
+      line-height: 1.25;
+      letter-spacing: -0.015em;
+    }
+
+    h2 {
+      max-width: 28ch;
+      margin: 0 0 1rem;
+      font-size: 1.5rem;
+    }
+
+    h3 {
+      margin: 2rem 0 0.75rem;
+      font-size: 1.25rem;
+    }
+
+    p,
+    li {
+      max-width: var(--measure);
+    }
+
+    p {
+      margin: 0.75rem 0;
+    }
+
+    ul,
+    ol {
+      padding-left: 1.3rem;
+    }
+
+    li + li {
+      margin-top: 0.45rem;
+    }
+
+    code {
+      padding: 0.08rem 0.28rem;
+      background: #e9eef4;
+      border-radius: 0.25rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.9em;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 1px;
+      margin: 1.5rem 0 0;
+      padding: 1px;
+      list-style: none;
+      background: var(--border-strong);
+      border: 1px solid var(--border-strong);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+
+    .flow li {
+      min-height: 8.5rem;
+      margin: 0;
+      padding: 1rem;
+      background: var(--surface);
+    }
+
+    .flow .step {
+      display: block;
+      margin-bottom: 0.6rem;
+      color: var(--primary-hover);
+      font-weight: 700;
+    }
+
+    .flow strong {
+      display: block;
+      line-height: 1.25;
+    }
+
+    .flow span:last-child {
+      display: block;
+      margin-top: 0.45rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+      line-height: 1.4;
+    }
+
+    .table-wrap {
+      margin-top: 1.5rem;
+      overflow-x: auto;
+      border: 1px solid var(--border-strong);
+      border-radius: 0.5rem;
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th,
+    td {
+      padding: 0.8rem 0.9rem;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background: var(--surface-subtle);
+      color: var(--nav);
+      font-weight: 700;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:hover {
+      background: var(--surface-subtle);
+    }
+
+    .state {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: 0.375rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .state-ready {
+      background: var(--teal-soft);
+      color: var(--text);
+      border: 1px solid var(--teal);
+    }
+
+    .state-progress {
+      background: var(--amber-soft);
+      color: var(--text);
+      border: 1px solid var(--amber);
+    }
+
+    .state-pending {
+      background: var(--danger-soft);
+      color: var(--text);
+      border: 1px solid var(--danger);
+    }
+
+    .implementation-note {
+      max-width: var(--measure);
+      margin-top: 1.25rem;
+      padding: 1rem;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+    }
+
+    .implementation-note strong {
+      color: var(--nav);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+
+    .split > div {
+      min-width: 0;
+    }
+
+    .split h3 {
+      margin-top: 0;
+    }
+
+    .boundary-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+      margin: 1.5rem 0 0;
+      padding: 0;
+      list-style: none;
+      border: 1px solid var(--border-strong);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+
+    .boundary-list li {
+      max-width: none;
+      margin: 0;
+      padding: 1rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .boundary-list li:nth-child(odd) {
+      border-right: 1px solid var(--border);
+    }
+
+    .boundary-list li:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+
+    .boundary-list strong {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: var(--nav);
+    }
+
+    .timeline {
+      margin: 1.5rem 0 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid var(--border-strong);
+    }
+
+    .timeline li {
+      display: grid;
+      grid-template-columns: 10rem 1fr;
+      gap: 1.5rem;
+      max-width: none;
+      margin: 0;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .timeline strong {
+      color: var(--nav);
+    }
+
+    details {
+      margin-top: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+    }
+
+    summary {
+      padding: 0.9rem 1rem;
+      cursor: pointer;
+      color: var(--nav);
+      font-weight: 700;
+    }
+
+    details > div {
+      padding: 0 1rem 1rem;
+    }
+
+    .page-footer {
+      padding: 1.5rem 0 3rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border-strong);
+      font-size: 0.875rem;
+    }
+
+    @media (max-width: 58rem) {
+      nav ol,
+      .split,
+      .boundary-list {
+        grid-template-columns: 1fr;
+      }
+
+      .boundary-list li,
+      .boundary-list li:nth-child(odd),
+      .boundary-list li:nth-last-child(-n + 2) {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .boundary-list li:last-child {
+        border-bottom: 0;
+      }
+
+      .flow {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 38rem) {
+      .page-header-inner,
+      main,
+      .page-footer {
+        width: min(100% - 1.25rem, 74rem);
+      }
+
+      .page-header-inner {
+        padding: 2rem 0 1.5rem;
+      }
+
+      .status-summary,
+      .timeline li {
+        grid-template-columns: 1fr;
+        gap: 0.4rem;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow li {
+        min-height: 0;
+      }
+
+      th,
+      td {
+        padding: 0.7rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+    }
+
+    @media print {
+      body {
+        background: var(--surface);
+        font-size: 10pt;
+      }
+
+      .page-header {
+        background: var(--surface);
+        color: var(--text);
+        border-bottom: 2px solid var(--nav);
+      }
+
+      .page-header p,
+      .snapshot {
+        color: var(--muted);
+      }
+
+      nav,
+      .skip-link {
+        display: none;
+      }
+
+      section,
+      section + section {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+      }
+
+      a {
+        color: inherit;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!--
+    THESIS: Compare the three runtime paths before explaining their parts. Avoid a long migration diary.
+    OWN-WORLD: Use the product's deep navy, flat white surfaces, azure actions, thin rules, and compact operational type.
+    STORY: The reader identifies what runs now, what we tested, which rules stay local, and what work remains.
+    FIRST VIEWPORT: Show the title, honest status, contents, system flow, and runtime comparison near the top.
+    FORM: Comparison-first documentation, third in the ordered structure list, seed c6cfd270.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <a class="skip-link" href="#main-content">Skip to the explanation</a>
+
+  <header class="page-header">
+    <div class="page-header-inner">
+      <h1>Voice-agent implementation overview</h1>
+      <p>
+        This page explains the voice work in this repository. It separates the active gateway,
+        the two comparison candidates, and the work that remains.
+      </p>
+      <div class="snapshot">Repository snapshot: 30 August 2026. Scope: fictional appointment rescheduling demo.</div>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <div class="status-summary" role="note" aria-label="Current implementation status">
+      <strong>Current status</strong>
+      <p>
+        The local implementation exists. Local safety checks pass. No runtime has won the comparison.
+        The corrected Telnyx dialogue needs another managed test batch. Paid live comparison calls have not started.
+      </p>
+    </div>
+
+    <section id="runtimes" aria-labelledby="runtimes-heading">
+      <h2 id="runtimes-heading">Runtime comparison</h2>
+      <p>
+        The repository keeps three selectable paths. The first path is the older baseline.
+        The other two paths form the current comparison.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Path</th>
+              <th scope="col">Selection value</th>
+              <th scope="col">Speech and call layer</th>
+              <th scope="col">Dialogue layer</th>
+              <th scope="col">Repository status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Current gateway</strong></td>
+              <td><code>current-gateway</code> or <code>conversation-relay</code></td>
+              <td>Twilio ConversationRelay</td>
+              <td>Local phrase match or one classified intent, then fixed replies</td>
+              <td><span class="state state-ready">Default baseline</span></td>
+            </tr>
+            <tr>
+              <td><strong>Improved Twilio candidate</strong></td>
+              <td><code>twilio-candidate</code></td>
+              <td>Twilio ConversationRelay with Deepgram Flux and ElevenLabs</td>
+              <td>Streaming OpenAI dialogue with five local tools</td>
+              <td><span class="state state-progress">Candidate</span></td>
+            </tr>
+            <tr>
+              <td><strong>Telnyx managed candidate</strong></td>
+              <td><code>telnyx-candidate</code> or <code>telnyx-ai-assistant</code></td>
+              <td>Telnyx Call Control with an embedded AI Assistant</td>
+              <td>GPT-5.6 Luna, Deepgram Flux, Maeve voice, and five webhooks</td>
+              <td><span class="state state-progress">Candidate</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <nav aria-label="Document contents">
+      <h2>On this page</h2>
+      <ol>
+        <li><a href="#runtimes">Runtime comparison</a></li>
+        <li><a href="#system">System shape</a></li>
+        <li><a href="#implementations">What each path does</a></li>
+        <li><a href="#authority">Scheduling authority</a></li>
+        <li><a href="#safety">Safety boundaries</a></li>
+        <li><a href="#status">Evidence and remaining work</a></li>
+      </ol>
+    </nav>
+
+    <section id="system" aria-labelledby="system-heading">
+      <h2 id="system-heading">System shape</h2>
+      <p>
+        The dashboard uses one internal control contract. The selected runtime changes behind that contract.
+        Both new candidates use the same scheduling rules and result shape.
+      </p>
+
+      <ol class="flow" aria-label="Voice-agent request flow">
+        <li><span class="step">1</span><strong>Dashboard</strong><span>Starts, polls, and stops one controlled attempt.</span></li>
+        <li><span class="step">2</span><strong>Runtime switch</strong><span>Selects the current gateway, Twilio candidate, or Telnyx candidate.</span></li>
+        <li><span class="step">3</span><strong>Call provider</strong><span>Places the test call and carries speech.</span></li>
+        <li><span class="step">4</span><strong>Voice agent</strong><span>Understands the caller and chooses a narrow tool.</span></li>
+        <li><span class="step">5</span><strong>Local authority</strong><span>Checks identity, slots, confirmation, and writes.</span></li>
+        <li><span class="step">6</span><strong>Demo result</strong><span>Updates only the fictional appointment and dashboard.</span></li>
+      </ol>
+
+      <div class="implementation-note">
+        <strong>Why the split matters.</strong>
+        The model handles language. The application owns facts and changes. A model reply cannot create a valid appointment change alone.
+      </div>
+    </section>
+
+    <section id="implementations" aria-labelledby="implementations-heading">
+      <h2 id="implementations-heading">What each path does</h2>
+
+      <h3>1. Current gateway</h3>
+      <p>
+        This is the checked-in baseline under <code>src/voice-gateway</code>.
+        Its configuration still uses Twilio account fields and a local model endpoint.
+      </p>
+      <ol>
+        <li>The dashboard creates a request ID and sends the fictional call context.</li>
+        <li>The gateway takes a single-call lease before it creates a billable call.</li>
+        <li>Twilio answers with ConversationRelay and opens a WebSocket to the gateway.</li>
+        <li>The gateway receives final speech prompts and maps them to one intent.</li>
+        <li>A fixed state machine writes the caller-facing reply.</li>
+        <li>The gateway stores the final result. The dashboard then applies it once.</li>
+      </ol>
+      <p>
+        This design protects scheduling facts. It does not handle natural corrections or combined constraints well.
+        That limit caused the new candidate work.
+      </p>
+
+      <h3>2. Improved Twilio candidate</h3>
+      <p>
+        This path keeps ConversationRelay for the telephone and speech pipeline.
+        It replaces the fixed intent dialogue with a streaming model conversation.
+      </p>
+      <ul>
+        <li>The model keeps prior messages and responds to corrections or interruptions.</li>
+        <li>The model streams text back through ConversationRelay.</li>
+        <li>Five typed tools call the local scheduling authority.</li>
+        <li>The candidate records provider events, model output, tool calls, transcripts, and audio.</li>
+        <li>The dashboard keeps the same start, poll, stop, and result contract.</li>
+      </ul>
+
+      <h3>3. Telnyx managed candidate</h3>
+      <p>
+        This path moves speech recognition, dialogue, and text-to-speech into a Telnyx AI Assistant.
+        The application still owns every scheduling decision.
+      </p>
+      <ul>
+        <li>Call Control Dial starts one call with an embedded assistant.</li>
+        <li>Dynamic variables carry the attempt ID, clinic name, patient name, and tool token.</li>
+        <li>Telnyx sends signed lifecycle events to the local gateway.</li>
+        <li>The assistant calls five synchronous scheduling webhooks.</li>
+        <li>Each webhook binds its bearer token to the active call.</li>
+        <li>The candidate stores evidence for later safety, latency, and voice review.</li>
+      </ul>
+
+      <div class="implementation-note">
+        <strong>Earlier managed trial.</strong>
+        Migration records describe an earlier nine-tool assistant and a later eight-tool trial.
+        The current comparison uses five tools. This reduces model-controlled transitions.
+      </div>
+    </section>
+
+    <section id="authority" aria-labelledby="authority-heading">
+      <h2 id="authority-heading">The scheduling authority stays local</h2>
+      <p>
+        Both new candidates call the same authority in <code>src/voice-experiment/scheduling-authority.ts</code>.
+        The provider and model cannot bypass it.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">Purpose</th>
+              <th scope="col">Important rule</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>verify_identity</code></td>
+              <td>Records confirmed, unclear, or wrong-person identity.</td>
+              <td>No appointment facts before confirmation.</td>
+            </tr>
+            <tr>
+              <td><code>find_slots</code></td>
+              <td>Returns filtered times from the fictional schedule.</td>
+              <td>The model cannot invent a slot.</td>
+            </tr>
+            <tr>
+              <td><code>prepare_change</code></td>
+              <td>Stores one reschedule or cancellation proposal.</td>
+              <td>This step does not change the appointment.</td>
+            </tr>
+            <tr>
+              <td><code>commit_change</code></td>
+              <td>Applies the prepared action.</td>
+              <td>It needs explicit confirmation and a valid action token.</td>
+            </tr>
+            <tr>
+              <td><code>request_staff_follow_up</code></td>
+              <td>Records a safe handoff.</td>
+              <td>Use it when automation cannot continue safely.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="split">
+        <div>
+          <h3>What the agent can do</h3>
+          <ul>
+            <li>Understand normal patient language.</li>
+            <li>Ask one useful question.</li>
+            <li>Keep context after a correction.</li>
+            <li>Select a narrow tool.</li>
+            <li>Explain a returned result.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What the application must do</h3>
+          <ul>
+            <li>Protect identity and appointment facts.</li>
+            <li>Return real fictional availability.</li>
+            <li>Prepare the exact requested change.</li>
+            <li>Check confirmation and operation IDs.</li>
+            <li>Apply one idempotent result.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="safety" aria-labelledby="safety-heading">
+      <h2 id="safety-heading">Safety boundaries in the demo</h2>
+      <p>
+        The implementation treats every phone call as a controlled experiment.
+        These rules are part of the code, not only the prompt.
+      </p>
+
+      <ul class="boundary-list">
+        <li><strong>Fictional data only</strong>The call can change only the demo appointment.</li>
+        <li><strong>Local dashboard only</strong>The server action rejects non-loopback dashboard origins.</li>
+        <li><strong>Explicit billable action</strong>The interface shows a second confirmation before a call.</li>
+        <li><strong>One active call</strong>A file lease blocks concurrent calls and adds a ten-minute cooldown.</li>
+        <li><strong>Stable request IDs</strong>A retry can recover an uncertain start without a second local attempt.</li>
+        <li><strong>Provider verification</strong>Twilio and Telnyx callback paths verify provider signatures.</li>
+        <li><strong>Bound tool access</strong>Telnyx tools require a per-attempt token and matching call ID.</li>
+        <li><strong>Idempotent changes</strong>An operation ID can return its first result, but cannot run different input.</li>
+      </ul>
+
+      <div class="implementation-note">
+        <strong>Production boundary.</strong>
+        This demo does not prove HIPAA compliance. It does not use a real clinic schedule.
+        Candidate recordings exist only for the fictional comparison and need a separate production policy.
+      </div>
+    </section>
+
+    <section id="status" aria-labelledby="status-heading">
+      <h2 id="status-heading">Evidence and remaining work</h2>
+      <p>
+        The latest repository plan keeps both candidates open.
+        It selects a winner only after the same evidence gates pass.
+      </p>
+
+      <ol class="timeline">
+        <li><strong>Baseline built</strong><span>The original Twilio gateway can run the controlled fictional call.</span></li>
+        <li><strong>Telnyx explored</strong><span>Standalone TeXML scripts and managed assistant trials tested account and API boundaries.</span></li>
+        <li><strong>Comparison lane built</strong><span>The repository now has two candidates, one authority, one scenario corpus, and one evidence format.</span></li>
+        <li><strong>Local checks passed</strong><span>The 28 August task record reports 141 passing voice tests and successful provider preflight.</span></li>
+        <li><strong>Managed dialogue incomplete</strong><span>Twelve Telnyx web-chat runs found defects. The corrected version needs another managed batch.</span></li>
+        <li><strong>Live comparison pending</strong><span>Ten controlled calls per viable path have not started. No runtime has won.</span></li>
+      </ol>
+
+      <h3>What must happen next</h3>
+      <ol>
+        <li>Run the corrected Telnyx managed dialogue batch after approval.</li>
+        <li>Complete the blind voice evaluation.</li>
+        <li>Run controlled live calls for each viable path after approval.</li>
+        <li>Measure greeting, turn, interruption, tool, and outcome results.</li>
+        <li>Select the winner. Keep the other candidate as configuration rollback.</li>
+      </ol>
+
+      <details>
+        <summary>Source map</summary>
+        <div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Area</th>
+                  <th scope="col">Main source</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Dashboard control plane</td><td><a href="../src/app/(workspace)/dashboard/actions.ts"><code>src/app/(workspace)/dashboard/actions.ts</code></a></td></tr>
+                <tr><td>Default gateway</td><td><a href="../src/voice-gateway/server.ts"><code>src/voice-gateway/server.ts</code></a></td></tr>
+                <tr><td>Runtime switch</td><td><a href="../src/voice-experiment/runtime-switch.ts"><code>src/voice-experiment/runtime-switch.ts</code></a></td></tr>
+                <tr><td>Shared scheduling authority</td><td><a href="../src/voice-experiment/scheduling-authority.ts"><code>src/voice-experiment/scheduling-authority.ts</code></a></td></tr>
+                <tr><td>Improved Twilio gateway</td><td><a href="../src/voice-experiment/twilio-candidate-gateway.ts"><code>src/voice-experiment/twilio-candidate-gateway.ts</code></a></td></tr>
+                <tr><td>Telnyx assistant definition</td><td><a href="../src/voice-experiment/telnyx-candidate.ts"><code>src/voice-experiment/telnyx-candidate.ts</code></a></td></tr>
+                <tr><td>Telnyx gateway</td><td><a href="../src/voice-experiment/telnyx-candidate-gateway.ts"><code>src/voice-experiment/telnyx-candidate-gateway.ts</code></a></td></tr>
+                <tr><td>Shared scenarios</td><td><a href="../src/voice-experiment/scenario-harness.ts"><code>src/voice-experiment/scenario-harness.ts</code></a></td></tr>
+                <tr><td>Evidence recorder</td><td><a href="../src/voice-experiment/evidence-recorder.ts"><code>src/voice-experiment/evidence-recorder.ts</code></a></td></tr>
+                <tr><td>Latest execution status</td><td><a href="wayfinder/voice-runtime-demo/tickets/10-run-local-safety-and-dialogue-qualification.md"><code>ticket 10</code></a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section aria-labelledby="summary-heading">
+      <h2 id="summary-heading">In short</h2>
+      <p>
+        The work connects each phone provider to a controlled test system.
+        It has swappable runtimes and local transaction rules.
+      </p>
+      <p>
+        The agent handles conversation while the application protects identity, availability, confirmation, and appointment changes.
+      </p>
+      <p>
+        The implementation is still experimental. Local safety is strong, but live voice evidence must choose the final runtime.
+      </p>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <p>Prepared from the checked-out source and repository work records. No external service was changed.</p>
+  </footer>
+</body>
+</html>

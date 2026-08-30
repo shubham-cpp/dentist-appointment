@@ -842,8 +842,10 @@ export function createVoiceGateway(
   return app;
 }
 
-async function startGateway() {
-  const config = loadVoiceGatewayConfig(process.env);
+export async function startGateway(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const config = loadVoiceGatewayConfig(environment);
   const app = createVoiceGateway(config);
   await app.listen({ host: "127.0.0.1", port: config.gatewayPort });
 

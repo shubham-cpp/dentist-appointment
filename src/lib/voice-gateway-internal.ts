@@ -31,7 +31,7 @@ export function createVoiceGatewayInternalRequestInit(
   };
 }
 
-export function voiceGatewayRequestFailureMessage(status: number) {
+export function voiceGatewayRequestFailureMessage(status: number, gatewayError?: string) {
   if (status === 400) {
     return "The voice gateway could not validate this request. Restart pnpm dev, then try again.";
   }
@@ -45,7 +45,8 @@ export function voiceGatewayRequestFailureMessage(status: number) {
   }
 
   if (status === 503) {
-    return "The local AI service is unavailable. Make sure claude-code-proxy is running, then restart pnpm dev.";
+    if (gatewayError?.startsWith("Telnyx API request failed with ")) return gatewayError;
+    return "The selected voice runtime could not start the call. Check the pnpm dev output, then try again.";
   }
 
   return "The voice gateway could not complete this request.";

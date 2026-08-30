@@ -15,39 +15,43 @@ The system calls only `CALL_TO_NUMBER`. It can change only Olivia Garcia's ficti
 - Recheck a slot before the final write.
 - Apply a confirmed reschedule or cancellation once.
 - Keep a cancellation audit record and free the old slot.
-- Do not retry uncertain Twilio call creation.
-- Limit one active call and one call every ten minutes.
+- Do not retry uncertain Telnyx call creation.
+- Limit one active call and one call every four minutes.
 
 ## Runtime boundary
 
 Next.js remains on port 3000. A Fastify gateway runs on port 3001.
 
-The dashboard calls the gateway through loopback. Twilio reaches the gateway through one public ngrok URL. The local Codex proxy stays on loopback.
+The dashboard calls the gateway through loopback. Telnyx reaches the gateway through one public ngrok URL. The local Codex proxy stays on loopback.
 
 ## Required public routes
 
-- `POST /twilio/voice`
-- `POST /twilio/status`
-- `POST /twilio/relay-complete`
-- `WSS /twilio/relay`
+- `POST /voice/answer`
+- `POST /voice/status`
+- `POST /voice/relay-complete`
+- `WSS /voice/relay`
 
-Validate every Twilio HTTP request and WebSocket handshake. Bind one CallSid and one Relay session to each attempt.
+Validate every Telnyx HTTP webhook with Ed25519. Bind one CallSid and one Relay session to each attempt. Accept the WebSocket, then bind it on a matching `setup` frame.
 
 ## Conversation policy
 
-Terra returns only a validated intent, slot ID, date, or time preference. It never writes caller-facing speech.
+Luna returns only a validated intent, slot ID, date, or time preference. It never writes caller-facing speech.
 
 The server renders all speech. It owns the 21-day fictional schedule and the final write.
 
 The main outcomes are `rescheduled`, `canceled`, `staff_follow_up`, and `identity_failed`.
 
-Use `gpt-5.6-terra` through the Responses API. Set reasoning effort to `medium`. Stop one model request after five seconds.
+Use `gpt-5.6-luna-fast` through the local Responses proxy. Set reasoning effort to `none`. Stop one model request after five seconds.
 
-Handle clear yes, no, and numbered choices in the gateway. Send other final speech to Terra once. A clear partial answer can finish after 1.6 seconds when Twilio sends no final prompt.
+Handle clear yes, no, provider, and numbered choices in the gateway. Bind names and offered times to the live call context. Send other final speech to Luna once. Use only final Telnyx transcripts to change state.
+
+Use the Conversation Relay `welcomeGreeting`. Use Deepgram Flux and `Telnyx.NaturalHD.astra`. Wait an estimated playback time before `end`.
+
+Verify identity first. Then ask for permission. Explain the change only after permission. Do not reveal appointment details before identity verification.
 
 ## Slice acceptance
 
-1. A deterministic ConversationRelay canary completes one controlled call.
+1. A deterministic Conversation Relay canary completes one controlled call.
 2. Natural caller language selects only eligible fictional slots.
 3. Interruptions, timeouts, bad callbacks, and restarts fail safely.
 4. The dashboard shows redacted progress, the result, and a manual stop action.

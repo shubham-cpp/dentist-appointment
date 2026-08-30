@@ -105,9 +105,14 @@ async function requestVoiceGateway(
   }
 
   if (!response.ok) {
+    const gatewayErrorResponse = z.object({ error: z.string().min(1).max(300) })
+      .safeParse(await response.json().catch(() => undefined));
     return {
       code: "request_failed",
-      message: voiceGatewayRequestFailureMessage(response.status),
+      message: voiceGatewayRequestFailureMessage(
+        response.status,
+        gatewayErrorResponse.success ? gatewayErrorResponse.data.error : undefined,
+      ),
       ok: false,
     };
   }

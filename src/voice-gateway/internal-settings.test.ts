@@ -27,7 +27,14 @@ test("builds a redirect-safe dashboard gateway request", () => {
 test("gives a safe, actionable message for known gateway failures", () => {
   assert.match(voiceGatewayRequestFailureMessage(401), /configuration/i);
   assert.match(voiceGatewayRequestFailureMessage(409), /active|cooldown/i);
-  assert.match(voiceGatewayRequestFailureMessage(503), /local AI service/i);
+  assert.match(voiceGatewayRequestFailureMessage(503), /selected voice runtime/i);
+  assert.equal(
+    voiceGatewayRequestFailureMessage(
+      503,
+      "Telnyx API request failed with 422 (code 10015): Invalid request payload.",
+    ),
+    "Telnyx API request failed with 422 (code 10015): Invalid request payload.",
+  );
   assert.equal(
     voiceGatewayRequestFailureMessage(500),
     "The voice gateway could not complete this request.",

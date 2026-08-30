@@ -12,7 +12,7 @@ Telnyx is a reasonable next carrier for this project. Conversation Relay on Teln
 
 A carrier swap does not fix the live demo by itself.
 
-As of 21 August 2026 the gateway and Telnyx sandbox use a **local matcher first**, then Terra with `reasoningEffort: "low"` for leftovers. Happy-path “yeah” / “that’s me” should not hit Terra.
+As of 23 August 2026 the dashboard gateway uses a **local matcher first**, then `gpt-5.6-luna-fast` with no reasoning. The isolated Oliver sandbox keeps its own legacy model settings. Happy-path “yeah” and “that’s me” do not need a model.
 
 The remaining delay is leftover model time and STT end-of-turn, not the carrier. Current architecture and measured logs: [telnyx-sandbox-current-architecture.md](telnyx-sandbox-current-architecture.md).
 

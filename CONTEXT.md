@@ -12,6 +12,22 @@ _Avoid_: Appointment manager, call recipient
 An outbound call from the dental service to a named patient about changing an appointment time.
 _Avoid_: Test-phone conversation, appointment-manager call
 
+**Fictional voice demo**:
+A non-production scheduling simulation that uses invented patient and appointment data. It permits complete call measurement for evaluation.
+_Avoid_: Production dental workflow, private patient call
+
+**Scheduling dialogue**:
+A flexible conversation that helps the patient reschedule. The scheduling system controls identity, availability, confirmation, and appointment changes.
+_Avoid_: Fixed call script, unrestricted agent action
+
+**Controlled destination**:
+The configured phone number that can receive calls from the fictional voice demo.
+_Avoid_: Arbitrary patient number, production destination
+
+**Call evidence record**:
+The correlated audio, transcript, timing, event, tool, failure, and outcome data retained for one fictional call.
+_Avoid_: Partial debug log, production patient record
+
 **Rescheduling case**:
 One affected appointment with its patient, current visit, provider, and permitted replacement times.
 _Avoid_: Generic call context
