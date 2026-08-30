@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A sourced technology decision report comparing Twilio ConversationRelay, a custom Telnyx TeXML media pipeline, and Telnyx AI Assistants for an inbound dental receptionist.">
+  <title>Voice platform decision for Brightview Dental</title>
+  <style>
+    :root {
+      --nav: #0d2850;
+      --nav-deep: #081d3c;
+      --primary: #1268e8;
+      --primary-hover: #0d56c5;
+      --canvas: #f3f6f9;
+      --surface: #ffffff;
+      --surface-subtle: #f8fafc;
+      --text: #152238;
+      --text-default: #314258;
+      --muted: #5f6f82;
+      --border: #dce3ea;
+      --border-strong: #c9d3de;
+      --teal: #0b8f86;
+      --teal-soft: #e1f5f2;
+      --lavender: #715dc4;
+      --lavender-soft: #eeeafd;
+      --blue-soft: #e5effe;
+      --amber: #a76504;
+      --amber-soft: #fff2d7;
+      --danger: #b33838;
+      --danger-soft: #fce8e8;
+      --focus: #83b4fa;
+      --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --radius: 8px;
+      --shadow: 0 2px 8px rgba(8, 29, 60, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    button, input, select { color: inherit; font: inherit; }
+    a { color: var(--primary-hover); text-underline-offset: 0.16em; }
+    a:hover { color: var(--primary); }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 3px;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 55%, transparent);
+    }
+    .skip-link {
+      position: fixed;
+      left: 16px;
+      top: -60px;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      padding: 8px 12px;
+      transition: top 140ms ease;
+    }
+    .skip-link:focus { top: 12px; }
+    .topbar {
+      min-height: 56px;
+      background: var(--nav);
+      border-bottom: 1px solid var(--nav-deep);
+      color: var(--surface);
+    }
+    .topbar-inner {
+      max-width: 1240px;
+      min-height: 56px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .topbar strong { color: var(--surface); font-weight: 600; }
+    .topbar-meta { color: var(--border-strong); font-size: 0.875rem; }
+    .section-nav {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: rgba(255, 255, 255, 0.98);
+      border-bottom: 1px solid var(--border);
+    }
+    .section-nav-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .section-nav a {
+      min-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      padding: 0 10px;
+      border-bottom: 2px solid transparent;
+      color: var(--text-default);
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .section-nav a:hover { border-bottom-color: var(--primary); color: var(--text); }
+    .page-shell { max-width: 1240px; margin: 28px auto 64px; padding: 0 24px; }
+    .document {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: clip;
+    }
+    .report-header { padding: 36px 40px 32px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      max-width: 24ch;
+      margin-bottom: 12px;
+      font-size: clamp(1.5rem, 3vw, 1.875rem);
+      line-height: 1.16;
+      letter-spacing: -0.028em;
+    }
+    h2 {
+      margin-bottom: 10px;
+      font-size: 1.25rem;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+    }
+    h3 { margin-bottom: 8px; font-size: 1.125rem; line-height: 1.35; }
+    .report-deck { max-width: 72ch; margin-bottom: 18px; color: var(--text-default); font-size: 1rem; }
+    .report-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-size: 0.875rem; }
+    .actions { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .button {
+      min-height: 44px;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+    }
+    .button:hover { background: var(--surface-subtle); border-color: var(--border-strong); }
+    .button.primary { background: var(--primary); border-color: var(--primary); color: var(--surface); }
+    .button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .report-section { border-top: 1px solid var(--border); padding: 34px 40px 38px; scroll-margin-top: 58px; }
+    .section-intro { max-width: 74ch; margin-bottom: 22px; color: var(--text-default); }
+    .decision-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(270px, 0.7fr); gap: 32px; align-items: start; }
+    .recommendation {
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--teal-soft);
+      padding: 20px;
+    }
+    .recommendation h2 { color: var(--text); }
+    .recommendation p { margin-bottom: 0; max-width: 66ch; }
+    .decision-note { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; color: var(--text-default); }
+    .rank-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .rank-row { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; padding: 12px 14px; }
+    .rank-row + .rank-row { border-top: 1px solid var(--border); }
+    .rank-number { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+    .rank-row strong { display: block; font-size: 1rem; }
+    .rank-row span { color: var(--muted); font-size: 0.75rem; }
+    .score { color: var(--text) !important; font-size: 1rem !important; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .callout {
+      margin-top: 20px;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--amber-soft);
+      padding: 16px 18px;
+    }
+    .callout strong { color: var(--text); }
+    .callout p:last-child { margin-bottom: 0; }
+    .table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    caption { padding: 12px 14px; text-align: left; color: var(--muted); font-size: 0.75rem; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--surface-subtle); color: var(--text); font-size: 0.75rem; font-weight: 700; }
+    tbody th { background: var(--surface); font-size: 0.875rem; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:last-child th { border-bottom: 0; }
+    tbody tr:hover td, tbody tr:hover th { background: var(--surface-subtle); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .choice-name { min-width: 176px; font-weight: 700; }
+    .fit { display: inline-block; border-radius: 6px; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; }
+    .fit.best { background: var(--teal-soft); color: var(--text); }
+    .fit.good { background: var(--blue-soft); color: var(--primary-hover); }
+    .fit.conditional { background: var(--amber-soft); color: var(--text); }
+    .legend { margin: 12px 0 0; color: var(--muted); font-size: 0.75rem; }
+    .architecture { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .architecture article { padding: 18px; }
+    .architecture article + article { border-left: 1px solid var(--border); }
+    .stack { margin: 14px 0 0; padding: 0; list-style: none; }
+    .stack li { position: relative; background: var(--surface-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px; font-size: 0.875rem; }
+    .stack li + li { margin-top: 13px; }
+    .stack li + li::before { content: ""; position: absolute; width: 1px; height: 13px; left: 50%; top: -14px; background: var(--border-strong); }
+    .owned { color: var(--primary-hover); font-weight: 600; }
+    .managed { color: var(--text); font-weight: 600; }
+    .cost-grid { display: grid; grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.5fr); gap: 28px; align-items: start; }
+    .calculator {
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+      padding: 18px;
+    }
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+    .preset {
+      min-height: 44px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 5px 9px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .preset[aria-pressed="true"] { background: var(--nav); border-color: var(--nav); color: var(--surface); }
+    .field { margin-top: 14px; }
+    .field label { display: block; margin-bottom: 5px; font-size: 0.875rem; font-weight: 600; }
+    .field input, .field select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 8px 10px;
+    }
+    .field-help { margin: 5px 0 0; color: var(--muted); font-size: 0.75rem; }
+    .field-error { margin: 10px 0 0; color: var(--danger); font-size: 0.875rem; font-weight: 600; }
+    .field input:invalid { border-color: var(--danger); }
+    .calc-summary { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 15px; }
+    .calc-summary strong { display: block; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+    .calc-summary span { color: var(--muted); font-size: 0.75rem; }
+    .cost-output { min-width: 0; }
+    .cost-output .table-wrap + .table-wrap { margin-top: 18px; }
+    .decision-table { margin-top: 28px; }
+    .latency-targets { margin-top: 26px; }
+    .assumptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin-top: 18px; color: var(--text-default); font-size: 0.875rem; }
+    .assumptions p { margin: 0; }
+    .assumptions strong { color: var(--text); }
+    details { border-top: 1px solid var(--border); }
+    details:first-of-type { margin-top: 20px; }
+    summary { cursor: pointer; padding: 13px 0; color: var(--text); font-weight: 600; }
+    .details-body { padding: 0 0 18px; color: var(--text-default); }
+    .details-body p:last-child, .details-body ul:last-child { margin-bottom: 0; }
+    .latency-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr); gap: 28px; align-items: start; }
+    .timeline { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .timeline-row { display: grid; grid-template-columns: 148px minmax(0, 1fr); }
+    .timeline-row + .timeline-row { border-top: 1px solid var(--border); }
+    .timeline-label { background: var(--surface-subtle); padding: 12px 14px; font-weight: 600; }
+    .timeline-value { padding: 12px 14px; color: var(--text-default); }
+    .greeting { border: 1px solid var(--border-strong); border-radius: 8px; background: var(--teal-soft); padding: 18px; }
+    .greeting blockquote { margin: 12px 0 0; color: var(--text); font-size: 1.125rem; font-weight: 600; }
+    .greeting p:last-child { margin-bottom: 0; }
+    .scenario-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .scenario { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 18px; padding: 16px 18px; }
+    .scenario + .scenario { border-top: 1px solid var(--border); }
+    .scenario h3 { margin: 0; }
+    .scenario p { margin: 0; color: var(--text-default); }
+    .test-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .test-item { background: var(--surface); padding: 15px 16px; }
+    .test-item strong { display: block; margin-bottom: 4px; }
+    .test-item span { color: var(--text-default); font-size: 0.875rem; }
+    .source-list { columns: 2; column-gap: 36px; margin: 0; padding-left: 20px; }
+    .source-list li { break-inside: avoid; margin-bottom: 10px; padding-left: 2px; color: var(--text-default); }
+    .source-list a { font-weight: 600; }
+    .source-list span { display: block; color: var(--muted); font-size: 0.75rem; }
+    .footer-note { border-top: 1px solid var(--border); background: var(--surface-subtle); padding: 20px 40px; color: var(--muted); font-size: 0.75rem; }
+    .nowrap { white-space: nowrap; }
+    .muted { color: var(--muted); }
+    .small { font-size: 0.875rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 900px) {
+      .decision-layout, .cost-grid, .latency-grid { grid-template-columns: 1fr; }
+      .architecture { grid-template-columns: 1fr; }
+      .architecture article + article { border-left: 0; border-top: 1px solid var(--border); }
+      .scenario { grid-template-columns: 1fr; gap: 6px; }
+      .source-list { columns: 1; }
+    }
+    @media (max-width: 640px) {
+      .topbar-inner, .section-nav-inner, .page-shell { padding-left: 16px; padding-right: 16px; }
+      .topbar-inner { align-items: flex-start; flex-direction: column; justify-content: center; gap: 0; padding-top: 8px; padding-bottom: 8px; }
+      .page-shell { margin-top: 16px; margin-bottom: 32px; }
+      .document { border-radius: 6px; }
+      .report-header, .report-section { padding-left: 20px; padding-right: 20px; }
+      .report-header { padding-top: 28px; }
+      .report-section { padding-top: 28px; padding-bottom: 30px; }
+      .report-meta { display: grid; gap: 4px; }
+      .assumptions, .test-grid { grid-template-columns: 1fr; }
+      .timeline-row { grid-template-columns: 1fr; }
+      .timeline-label { border-bottom: 1px solid var(--border); }
+      th, td { padding: 10px 11px; }
+      .footer-note { padding-left: 20px; padding-right: 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .skip-link, .button { transition: none; }
+    }
+    @media print {
+      body { background: var(--surface); font-size: 10pt; }
+      .topbar, .section-nav, .actions, .presets, .calculator .field { display: none !important; }
+      .page-shell { max-width: none; margin: 0; padding: 0; }
+      .document { border: 0; box-shadow: none; }
+      .report-header, .report-section { padding: 22px 0; }
+      .report-section { break-inside: avoid; }
+      .table-wrap { overflow: visible; }
+      a { color: inherit; text-decoration: none; }
+      a::after { content: " (" attr(href) ")"; font-size: 8pt; color: var(--muted); }
+      details { display: block; }
+      details > * { display: block; }
+      .source-list { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <!--
+    THESIS: Make the decision before exposing the machinery. Refuse a feature-first vendor brochure.
+    OWN-WORLD: Brightview navy, white work surfaces, thin rules, compact tables, and direct operational language.
+    STORY: The reader sees the recommendation, tests cost assumptions, checks tradeoffs, then receives a validation plan.
+    FIRST VIEWPORT: A restrained report header leads directly into the preferred option and weighted ranking.
+    FORM: Decision dossier, fifth grounded structure, seed key 1e3139e4.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <a class="skip-link" href="#main">Skip to report</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <strong>Brightview Dental · technology decision</strong>
+      <span class="topbar-meta">US inbound reception and scheduling · checked 30 August 2026</span>
+    </div>
+  </header>
+
+  <nav class="section-nav" aria-label="Report sections">
+    <div class="section-nav-inner">
+      <a href="#decision">Decision</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#cost">Cost</a>
+      <a href="#latency">Latency</a>
+      <a href="#experience">Developer experience</a>
+      <a href="#voice">Voice handling</a>
+      <a href="#integrations">Integrations</a>
+      <a href="#scenarios">Scenarios</a>
+      <a href="#validation">Validation</a>
+      <a href="#sources">Sources</a>
+    </div>
+  </nav>
+
+  <main id="main" class="page-shell">
+    <article class="document">
+      <header class="report-header">
+        <h1>Twilio ConversationRelay versus two Telnyx voice paths</h1>
+        <p class="report-deck">A decision report for an American-English virtual receptionist that answers inbound calls, schedules appointments, transfers callers, and connects to dental systems.</p>
+        <div class="report-meta">
+          <span>Currency: USD</span>
+          <span>Model for custom paths: OpenAI GPT-5.6 Luna through AI SDK and OpenRouter</span>
+          <span>Excluded: infrastructure and recording</span>
+        </div>
+        <div class="actions" aria-label="Report actions">
+          <button class="button primary" type="button" onclick="window.print()">Print or save PDF</button>
+          <button class="button" id="toggle-details" type="button" aria-pressed="false">Expand evidence</button>
+        </div>
+      </header>
+
+      <section id="decision" class="report-section">
+        <div class="decision-layout">
+          <div>
+            <div class="recommendation">
+              <h2>Start with Telnyx AI Assistants</h2>
+              <p>It gives Brightview the fastest production path. Start with Telnyx's native managed GPT-5.6 Luna option. Keep appointment authority in Brightview's backend.</p>
+            </div>
+            <p class="decision-note"><strong>Keep custom TeXML media as the control fallback.</strong> Use it when raw-audio control or savings justify a voice-infrastructure team. Choose Twilio when its ecosystem, telemetry, or contracts outweigh its higher price.</p>
+            <div class="callout">
+              <strong>The main finding</strong>
+              <p>Custom TeXML has the lowest expected usage cost. It also has the highest engineering cost and widest failure surface.</p>
+            </div>
+          </div>
+          <aside aria-label="Weighted ranking">
+            <h2>Weighted result</h2>
+            <div class="rank-list">
+              <div class="rank-row"><span class="rank-number">1</span><div><strong>Telnyx AI Assistant</strong><span>Managed default</span></div><span class="score">8.60</span></div>
+              <div class="rank-row"><span class="rank-number">2</span><div><strong>Twilio ConversationRelay</strong><span>Ecosystem choice</span></div><span class="score">7.45</span></div>
+              <div class="rank-row"><span class="rank-number">3</span><div><strong>Telnyx TeXML custom</strong><span>Control and scale</span></div><span class="score">6.60</span></div>
+            </div>
+            <p class="legend">Scores are out of 10. The model values call quality, integration control, delivery speed, reliability, cost, voice control, and portability.</p>
+          </aside>
+        </div>
+
+        <div class="table-wrap decision-table">
+          <table>
+            <caption>Decision summary. Ratings are analysis, not vendor claims.</caption>
+            <thead><tr><th scope="col">Choice</th><th scope="col">Best reason to choose it</th><th scope="col">Main cost</th><th scope="col">Fit</th></tr></thead>
+            <tbody>
+              <tr><th scope="row" class="choice-name">Twilio + ConversationRelay</th><td>Full custom agent logic with strong Twilio tooling and detailed relay telemetry.</td><td>Higher US inbound and relay list prices.</td><td><span class="fit good">Good</span></td></tr>
+              <tr><th scope="row" class="choice-name">Telnyx + TeXML custom media</th><td>Full control over audio, speech providers, buffering, AI SDK, and the agent loop.</td><td>Your team owns the full voice runtime and recovery.</td><td><span class="fit conditional">Conditional</span></td></tr>
+              <tr><th scope="row" class="choice-name">Telnyx AI Assistant</th><td>Shortest path to a managed receptionist with tools, transfer, speech, and turn-taking.</td><td>More Telnyx-specific configuration and less loop-level control.</td><td><span class="fit best">Best default</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <details>
+          <summary>Weighted score breakdown</summary>
+          <div class="details-body">
+            <div class="table-wrap">
+              <table>
+                <caption>Opinionated decision matrix for this dental receptionist. Scores are from 1 to 10.</caption>
+                <thead><tr><th scope="col">Criterion</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Twilio relay</th><th scope="col" class="num">TeXML custom</th><th scope="col" class="num">Telnyx Assistant</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">Conversation quality and latency</th><td class="num">25%</td><td class="num">8</td><td class="num">6</td><td class="num">9</td></tr>
+                  <tr><th scope="row">Scheduling and integration control</th><td class="num">20%</td><td class="num">8</td><td class="num">9</td><td class="num">8</td></tr>
+                  <tr><th scope="row">Delivery speed and developer burden</th><td class="num">20%</td><td class="num">7</td><td class="num">3</td><td class="num">10</td></tr>
+                  <tr><th scope="row">Reliability and failure recovery</th><td class="num">15%</td><td class="num">8</td><td class="num">5</td><td class="num">8</td></tr>
+                  <tr><th scope="row">Recurring cost</th><td class="num">10%</td><td class="num">5</td><td class="num">10</td><td class="num">8</td></tr>
+                  <tr><th scope="row">Voice control</th><td class="num">5%</td><td class="num">7</td><td class="num">10</td><td class="num">10</td></tr>
+                  <tr><th scope="row">Portability</th><td class="num">5%</td><td class="num">8</td><td class="num">9</td><td class="num">5</td></tr>
+                  <tr><th scope="row"><strong>Weighted score</strong></th><td class="num"><strong>100%</strong></td><td class="num"><strong>7.45</strong></td><td class="num"><strong>6.60</strong></td><td class="num"><strong>8.60</strong></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Change these scores after the pilot. The matrix favors completed, correct bookings over the cheapest minute.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Why the report uses this structure</summary>
+          <div class="details-body">
+            <p>The report follows architecture-decision guidance: state context, options, outcome, tradeoffs, confidence, and consequences. It uses tables for scanable comparisons and hides secondary evidence until requested.</p>
+            <p>Sources: <a href="https://learn.microsoft.com/en-us/azure/well-architected/architect-role/architecture-decision-record">Microsoft ADR guidance</a>, <a href="https://www.nngroup.com/articles/progressive-disclosure/">NN/g progressive disclosure</a>, and <a href="https://m2.material.io/design/components/data-tables.html">Material data-table guidance</a>.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="architecture" class="report-section">
+        <h2>What each choice manages</h2>
+        <p class="section-intro">Twilio provides a managed speech bridge. Custom TeXML exposes raw audio. Telnyx AI Assistant manages the complete voice loop.</p>
+        <div class="architecture" aria-label="Architecture ownership comparison">
+          <article>
+            <h3>Twilio ConversationRelay</h3>
+            <ul class="stack">
+              <li class="managed">Twilio phone, STT, TTS, interruption</li>
+              <li class="owned">Your WebSocket protocol handler</li>
+              <li class="owned">AI SDK + OpenRouter + GPT-5.6 Luna</li>
+              <li class="owned">Your scheduling tools and state</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Telnyx TeXML custom media</h3>
+            <ul class="stack">
+              <li class="managed">Telnyx phone, TeXML, media transport</li>
+              <li class="owned">Your STT, endpointing, TTS, interruption</li>
+              <li class="owned">Your audio queues and WebSocket runtime</li>
+              <li class="owned">AI SDK + OpenRouter + GPT-5.6 Luna</li>
+              <li class="owned">Your scheduling tools and state</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Telnyx AI Assistant</h3>
+            <ul class="stack">
+              <li class="managed">Telnyx phone, speech, turn-taking</li>
+              <li class="managed">Managed agent loop, tools, transfer</li>
+              <li class="managed">Telnyx model or custom compatible endpoint</li>
+              <li class="owned">Your scheduling authority and records</li>
+            </ul>
+          </article>
+        </div>
+        <div class="callout">
+          <strong>Build the domain authority in Brightview</strong>
+          <p>The model may request slots. Brightview must validate availability, identity, appointment type, provider, and idempotency before any write.</p>
+        </div>
+        <details>
+          <summary>Exact meaning of “Telnyx + TeXML” in this report</summary>
+          <div class="details-body">
+            <p>It means a TeXML application using bidirectional <code>&lt;Stream&gt;</code> media. Telnyx supplies telephony and audio transport. Your runtime supplies STT, TTS, endpointing, buffering, interruption, the model, tools, and recovery.</p>
+            <p>This is not a simple <code>&lt;Gather&gt;</code>/<code>&lt;Say&gt;</code> IVR. It is also not Telnyx ConversationRelay. That product would overlap the managed speech boundary already represented by Twilio. See the <a href="https://developers.telnyx.com/docs/voice/programmable-voice/texml-verbs/stream">TeXML Stream reference</a>.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="cost" class="report-section">
+        <h2>Monthly cost model</h2>
+        <p class="section-intro">Public US list prices were checked on 30 August 2026. The calculator estimates component usage by connected minute.</p>
+
+        <div class="cost-grid">
+          <form class="calculator" id="cost-calculator">
+            <h3>Change the planning case</h3>
+            <div class="presets" aria-label="Usage presets">
+              <button class="preset" type="button" data-calls="20" data-minutes="4" aria-pressed="false">Less</button>
+              <button class="preset" type="button" data-calls="60" data-minutes="4" aria-pressed="true">Medium</button>
+              <button class="preset" type="button" data-calls="120" data-minutes="4" aria-pressed="false">High</button>
+              <button class="preset" type="button" data-calls="240" data-minutes="4" aria-pressed="false">Extra high</button>
+            </div>
+            <div class="field">
+              <label for="calls-per-day">Inbound calls per operating day</label>
+              <input id="calls-per-day" name="calls" type="number" value="60" min="1" max="10000" step="1">
+            </div>
+            <div class="field">
+              <label for="operating-days">Operating days per month</label>
+              <input id="operating-days" name="days" type="number" value="20.8" min="1" max="31" step="0.1">
+            </div>
+            <div class="field">
+              <label for="minutes-per-call">Average connected minutes</label>
+              <input id="minutes-per-call" name="minutes" type="number" value="4" min="0.1" max="120" step="0.1">
+              <p class="field-help">Use actual connected minutes when call-detail records become available.</p>
+            </div>
+            <p class="field-error" id="calculator-error" role="alert" hidden>Enter values within each stated range.</p>
+            <div class="calc-summary">
+              <strong id="monthly-minutes">4,992 connected minutes</strong>
+              <span id="monthly-calls">1,248 connected calls per month</span>
+            </div>
+            <p class="sr-only" id="calculator-status" aria-live="polite"></p>
+          </form>
+
+          <div class="cost-output">
+            <div class="table-wrap">
+              <table>
+                <caption>Estimated monthly voice cost for the selected usage.</caption>
+                <thead><tr><th scope="col">Choice</th><th scope="col" class="num">Rate per connected minute</th><th scope="col" class="num">One number</th><th scope="col" class="num">Monthly total</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row" class="choice-name">Twilio relay + Luna</th><td class="num">$0.0804</td><td class="num">$1.15</td><td class="num" id="twilio-total">$402.50</td></tr>
+                  <tr><th scope="row" class="choice-name">TeXML + Ultra voice + Luna</th><td class="num">$0.0324</td><td class="num">$1.00</td><td class="num" id="telnyx-texml-total">$162.74</td></tr>
+                  <tr><th scope="row" class="choice-name">Telnyx Assistant + native Luna</th><td class="num">$0.0550</td><td class="num">$1.00</td><td class="num" id="telnyx-luna-total">$275.56</td></tr>
+                  <tr><th scope="row" class="choice-name">Telnyx Assistant + managed Kimi</th><td class="num">about $0.0572</td><td class="num">$1.00</td><td class="num" id="telnyx-kimi-total">$286.54</td></tr>
+                  <tr><th scope="row" class="choice-name">Telnyx Assistant + custom Luna endpoint</th><td class="num">$0.0551</td><td class="num">$1.00</td><td class="num" id="telnyx-custom-total">$276.05</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <caption>Four planning scenarios. These are bands, not national benchmarks.</caption>
+                <thead><tr><th scope="col">Usage</th><th scope="col" class="num">Calls/month</th><th scope="col" class="num">Connected minutes</th><th scope="col" class="num">Twilio + Luna</th><th scope="col" class="num">TeXML Ultra + Luna</th><th scope="col" class="num">Assistant + native Luna</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">Less · 20/day · 4 min</th><td class="num">416</td><td class="num">1,664</td><td class="num">$134.93</td><td class="num">$54.91</td><td class="num">$92.52</td></tr>
+                  <tr><th scope="row">Medium · 60/day · 4 min</th><td class="num">1,248</td><td class="num">4,992</td><td class="num">$402.50</td><td class="num">$162.74</td><td class="num">$275.56</td></tr>
+                  <tr><th scope="row">High · 120/day · 4 min</th><td class="num">2,496</td><td class="num">9,984</td><td class="num">$803.85</td><td class="num">$324.47</td><td class="num">$550.12</td></tr>
+                  <tr><th scope="row">Extra high · 240/day · 4 min</th><td class="num">4,992</td><td class="num">19,968</td><td class="num">$1,606.56</td><td class="num">$647.94</td><td class="num">$1,099.24</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="assumptions">
+          <p><strong>Dental volume.</strong> A vendor range reports 40 to 80 inbound daily calls for a one-to-three-provider practice. Medium uses 60.</p>
+          <p><strong>Duration.</strong> Vendor and medical call-center evidence supports a three-to-five-minute planning range. This model uses four minutes.</p>
+          <p><strong>Custom LLM.</strong> The conservative model uses 6,000 uncached input tokens and 500 output tokens per call-minute.</p>
+          <p><strong>OpenRouter.</strong> The model adds its current 5.5% credit-purchase fee. BYOK can change this fee.</p>
+        </div>
+
+        <details>
+          <summary>Line-item rates and formulas</summary>
+          <div class="details-body">
+            <div class="table-wrap">
+              <table>
+                <caption>Per-minute cost inputs used by the calculator.</caption>
+                <thead><tr><th scope="col">Line item</th><th scope="col" class="num">Twilio relay</th><th scope="col" class="num">Telnyx TeXML custom</th><th scope="col" class="num">Telnyx AI Assistant</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">US local inbound telephony</th><td class="num">$0.0085</td><td class="num">$0.0032 starting</td><td class="num">$0.0032 starting</td></tr>
+                  <tr><th scope="row">Voice API or TeXML platform</th><td class="num">Included in route</td><td class="num">$0.0020</td><td class="num">Included in public engine formula</td></tr>
+                  <tr><th scope="row">Media stream</th><td class="num">Included</td><td class="num">$0.0035</td><td class="num">Included</td></tr>
+                  <tr><th scope="row">Voice engine</th><td class="num">$0.0700</td><td class="num">Team-owned</td><td class="num">$0.0500</td></tr>
+                  <tr><th scope="row">STT</th><td class="num">Included</td><td class="num">$0.0074</td><td class="num">Included</td></tr>
+                  <tr><th scope="row">TTS</th><td class="num">Included</td><td class="num">$0.00135 base; $0.0144 Ultra; $0.0216 HD</td><td class="num">Included</td></tr>
+                  <tr><th scope="row">GPT-5.6 Luna inference</th><td class="num">$0.001899 with OpenRouter</td><td class="num">$0.001899 with OpenRouter</td><td class="num">$0.0018 native; $0.001899 custom</td></tr>
+                  <tr><th scope="row">Managed Telnyx model allowance</th><td class="num">—</td><td class="num">—</td><td class="num">about $0.0040</td></tr>
+                  <tr><th scope="row"><strong>Modeled total</strong></th><td class="num"><strong>$0.080399</strong></td><td class="num"><strong>$0.019349 base; $0.032399 Ultra; $0.039599 HD</strong></td><td class="num"><strong>$0.055 native Luna; $0.055099 custom; about $0.0572 Kimi</strong></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="small">Formula: monthly total = connected minutes × modeled component rate + one local number. TeXML TTS assumes the assistant speaks 450 characters per call-minute. GPT-5.6 Luna costs $0.20 per million input tokens and $1.20 per million output tokens. The LLM allowance is $0.0018 before OpenRouter's fee.</p>
+            <p class="small">Sources: <a href="https://www.twilio.com/en-us/voice/pricing/us">Twilio US Voice pricing</a>, <a href="https://telnyx.com/pricing/voice-api">Telnyx Voice API pricing</a>, <a href="https://telnyx.com/pricing/voice-ai-agents">Telnyx Voice AI pricing</a>, <a href="https://developers.openai.com/api/docs/models/gpt-5.6-luna">OpenAI GPT-5.6 Luna</a>, and <a href="https://openrouter.ai/pricing">OpenRouter pricing</a>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>SMS, transfer, taxes, and excluded costs</summary>
+          <div class="details-body">
+            <ul>
+              <li>One US outbound SMS segment starts at $0.0083 on Twilio and $0.004 on Telnyx. Carrier fees and 10DLC costs are additional.</li>
+              <li>Telnyx lists call transfer at $0.10 per invocation. A transferred call can also create another voice leg.</li>
+              <li>Twilio and Telnyx round partial voice minutes per call. Short calls therefore cost more than aggregate seconds suggest.</li>
+              <li>Taxes, regulatory fees, committed-use discounts, support plans, OpenRouter minimum credit fees, and failed-call behavior are excluded.</li>
+              <li>Infrastructure and recording are excluded by request.</li>
+            </ul>
+            <p>Sources: <a href="https://www.twilio.com/en-us/sms/pricing/us">Twilio SMS pricing</a>, <a href="https://telnyx.com/pricing/messaging">Telnyx Messaging pricing</a>, <a href="https://help.twilio.com/articles/223132307-How-are-Twilio-voice-and-calling-product-minutes-rounded-for-billing-">Twilio billing increments</a>, and <a href="https://support.telnyx.com/en/articles/1130659-billing-increments">Telnyx billing increments</a>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Evidence quality for the dental usage bands</summary>
+          <div class="details-body">
+            <p>No public national dataset gives reliable inbound call volume for a typical US dental office. The bands are capacity-planning examples.</p>
+            <p>A dental automation vendor reports 40 to 80 inbound calls daily for one-to-three-provider practices. Another vendor reports 75 total calls, with half inbound. A medical benchmark uses three minutes as a receptionist handle-time assumption. These are directional sources.</p>
+            <p>Replace these bands with 30 days of call-detail records before signing a volume commitment. Sources: <a href="https://ainora.lt/blog/dental-practice-phone-call-statistics-2026">Ainora dental phone statistics</a>, <a href="https://www.getweave.com/5-tips-to-nourish-client-relationships/">Weave dental call estimate</a>, and <a href="https://blog.callmydoc.com/new-blog-1/patient-phone-communication-2026">CallMyDoc patient phone benchmark</a>.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="latency" class="report-section">
+        <h2>Latency and first response</h2>
+        <p class="section-intro">A fast greeting is easy. Natural turn-taking is the harder test. Measure both separately.</p>
+        <div class="latency-grid">
+          <div>
+            <div class="table-wrap">
+              <table>
+                <caption>Published latency evidence and practical interpretation.</caption>
+                <thead><tr><th scope="col">Choice</th><th scope="col">Published evidence</th><th scope="col">Interpretation</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row" class="choice-name">Twilio ConversationRelay</th><td>Twilio reports under 0.5 seconds median and under 0.725 seconds at p95.</td><td>Useful vendor signal. Reproduce it with Luna, OpenRouter, tools, and US PSTN calls.</td></tr>
+                  <tr><th scope="row" class="choice-name">Telnyx TeXML custom</th><td>No end-to-end figure was found for raw TeXML, external speech, Luna, and TTS.</td><td>Your endpointing, buffers, vendors, and runtime can make it fastest or slowest.</td></tr>
+                  <tr><th scope="row" class="choice-name">Telnyx AI Assistant</th><td>Telnyx publishes a 450 ms co-located architecture budget and sub-second claims.</td><td>Most credible with a Telnyx-hosted model. OpenRouter weakens the colocation advantage.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="legend">Vendor figures use different scopes. They are not service-level guarantees or an apples-to-apples benchmark.</p>
+          </div>
+          <aside class="greeting">
+            <h3>Use a fixed inbound greeting</h3>
+            <p>Start it without an LLM or patient lookup.</p>
+            <blockquote>“Thanks for calling Brightview Dental. I'm Ava, the virtual receptionist. How can I help today?”</blockquote>
+          </aside>
+        </div>
+
+        <div class="callout">
+          <strong>Your suggested greeting is outbound</strong>
+          <p>“Am I speaking with &lt;patient name&gt;?” fits an outbound call. An inbound agent should not assume caller identity from caller ID.</p>
+        </div>
+
+        <h3 class="latency-targets">Trial latency targets</h3>
+        <div class="timeline">
+          <div class="timeline-row"><div class="timeline-label">First greeting</div><div class="timeline-value">Answer to audible speech: p50 under 1.0 second and p95 under 1.5 seconds.</div></div>
+          <div class="timeline-row"><div class="timeline-label">Tool-free turn</div><div class="timeline-value">Caller speech end to first audible reply: p50 under 0.8 seconds and p95 under 1.5 seconds.</div></div>
+          <div class="timeline-row"><div class="timeline-label">Scheduling turn</div><div class="timeline-value">One scheduling tool included: p50 under 1.2 seconds and p95 under 2.0 seconds.</div></div>
+          <div class="timeline-row"><div class="timeline-label">Interruption</div><div class="timeline-value">Speech stops promptly, the partial reply is recorded, and the task state remains correct.</div></div>
+        </div>
+
+        <details>
+          <summary>How to compare latency fairly</summary>
+          <div class="details-body">
+            <p>Measure voice-to-voice latency from the end of caller speech to the first audible agent audio. Report p50, p95, failures, and interruption recovery.</p>
+            <p>Keep caller regions, carrier routes, prompts, tools, model, voice quality, and concurrency equal. Separate endpointing, STT, model time-to-first-token, tool time, TTS, and network time.</p>
+            <p>Twilio exposes STT, application, TTS, and network timing in ConversationRelay Insights. Telnyx exposes component and cost breakdowns through Session Analysis. Sources: <a href="https://www.twilio.com/docs/voice/voice-insights/conversation-relay-summary">Twilio relay summary</a> and <a href="https://developers.telnyx.com/docs/reporting/session-analysis/index">Telnyx Session Analysis</a>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Latency sources and caveats</summary>
+          <div class="details-body">
+            <p>Twilio's product page reports the median and p95 figures. Its documentation also recommends streaming text tokens immediately. Telnyx publishes a 450 ms architecture budget for a co-located stack, but warns readers to test the selected models, tools, and routes.</p>
+            <p>Sources: <a href="https://www.twilio.com/en-us/products/conversational-ai/conversationrelay">Twilio ConversationRelay product page</a>, <a href="https://www.twilio.com/docs/voice/conversationrelay/websocket-messages">Twilio WebSocket messages</a>, and <a href="https://telnyx.com/resources/voice-ai-agents-compared-latency">Telnyx latency comparison</a>.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="experience" class="report-section">
+        <h2>Developer experience and operational control</h2>
+        <p class="section-intro">All three choices can call Brightview's scheduling APIs. They differ in how much real-time conversation code Brightview owns.</p>
+        <div class="table-wrap">
+          <table>
+            <caption>Developer and operations comparison.</caption>
+            <thead><tr><th scope="col">Area</th><th scope="col">Twilio relay</th><th scope="col">Telnyx TeXML custom</th><th scope="col">Telnyx AI Assistant</th></tr></thead>
+            <tbody>
+              <tr><th scope="row" class="choice-name">Pilot effort</th><td>Medium. Build a secure WebSocket agent and tools.</td><td>Highest. Build speech, endpointing, playback, barge-in, agent, tools, and traces.</td><td>Lowest. Configure an assistant and narrow webhook tools.</td></tr>
+              <tr><th scope="row" class="choice-name">AI SDK control</th><td>Full control over prompts, model streaming, tools, memory, and retries.</td><td>Full control over prompts, model streaming, tools, memory, and retries.</td><td>Limited to the managed loop. A custom compatible endpoint changes the model, not all orchestration.</td></tr>
+              <tr><th scope="row" class="choice-name">Protocol</th><td>Structured JSON prompts, tokens, DTMF, interruptions, and session events.</td><td>TeXML plus raw bidirectional audio, playback marks, clear, DTMF, and error frames.</td><td>Assistant API, portal configuration, events, and webhook tools.</td></tr>
+              <tr><th scope="row" class="choice-name">Call-flow tools</th><td>TwiML, Studio, SIP, Dial, and external application logic.</td><td>TeXML, SIP, Dial, Stream, and external application logic.</td><td>Webhook, transfer, SIP Refer, handoff, DTMF, and hangup tools.</td></tr>
+              <tr><th scope="row" class="choice-name">Observability</th><td>Strong relay-specific latency and event views.</td><td>Team-built cross-vendor traces plus Telnyx call data.</td><td>One-vendor session, component, cost, and Langfuse-compatible views.</td></tr>
+              <tr><th scope="row" class="choice-name">Failure ownership</th><td>You own model, tool, and WebSocket recovery. Twilio owns speech and carrier layers.</td><td>You own audio, speech, model, tool, queue, and state recovery.</td><td>Telnyx owns more of the loop. You still own tool correctness and fallbacks.</td></tr>
+              <tr><th scope="row" class="choice-name">Lock-in</th><td>ConversationRelay message semantics and Twilio call control.</td><td>Lowest platform lock-in. Custom complexity creates operational lock-in.</td><td>Highest. Assistant tools, events, settings, and session behavior are Telnyx-specific.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <details>
+          <summary>Custom GPT-5.6 Luna on each path</summary>
+          <div class="details-body">
+            <p><strong>Twilio.</strong> AI SDK can stream GPT-5.6 Luna through OpenRouter. Your application owns tools and sends response text to the relay.</p>
+            <p><strong>Telnyx TeXML.</strong> AI SDK owns the same model loop. Your application also converts model text into audio and sends it to the media stream.</p>
+            <p><strong>Telnyx AI Assistant.</strong> Telnyx offers GPT-5.6 Luna as a native managed model. This needs no separate OpenAI key. Telnyx also accepts a public OpenAI-compatible endpoint.</p>
+            <p>Use native Luna when model choice is enough. Use an adapter only when Brightview must preserve exact AI SDK tools, state, authentication, or retry behavior.</p>
+            <p>Sources: <a href="https://telnyx.com/release-notes/glm-5-2-gpt-5-6-luna-sol-voice-ai-assistants">Telnyx managed Luna release note</a>, <a href="https://developers.telnyx.com/docs/inference/ai-assistants/custom-llm">Telnyx custom LLM providers</a>, <a href="https://www.twilio.com/docs/studio/widget-library/run-conversationrelay">Twilio Studio ConversationRelay</a>, and <a href="https://developers.openai.com/api/docs/models/gpt-5.6-luna">OpenAI GPT-5.6 Luna</a>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Failure handling that changes the choice</summary>
+          <div class="details-body">
+            <p>Twilio does not automatically reconnect an unexpected ConversationRelay WebSocket disconnect. The session fails. Your action callback can return new TwiML to reconnect.</p>
+            <p>TeXML can reconnect its media WebSocket by default. Your code must prevent duplicate audio, stale state, and unsafe tool replay. A managed assistant removes your WebSocket from the speech loop.</p>
+            <p>Every option needs timeouts, idempotency keys, a no-write fallback, human transfer, and an after-call task when scheduling systems fail. Source: <a href="https://www.twilio.com/docs/voice/conversationrelay/websocket-messages">Twilio ConversationRelay error handling</a>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Reliability, support, and public limits</summary>
+          <div class="details-body">
+            <p><strong>Twilio.</strong> Voice supports a fallback URL. Its public API SLA starts at 99.95%. Paid support starts at $250 monthly or 4% of spend. Speech-provider coverage can differ.</p>
+            <p><strong>TeXML custom.</strong> TeXML supports primary and fallback webhooks. Media streams reconnect by default. Your runtime must detect replayed audio, restore state, and prevent duplicate tool writes.</p>
+            <p><strong>Telnyx AI Assistant.</strong> The API exposes fallback configuration. Public pay-as-you-go pricing lists 500 concurrent calls. Confirm support response terms and complete-stack availability in the contract.</p>
+            <p>Sources: <a href="https://www.twilio.com/docs/usage/security/availability-reliability">Twilio availability guidance</a>, <a href="https://www.twilio.com/en-us/legal/service-level-agreement/twilio-apis">Twilio API SLA</a>, <a href="https://www.twilio.com/en-us/support-plans">Twilio support plans</a>, <a href="https://developers.telnyx.com/docs/voice/programmable-voice/texml-fundamentals">TeXML fundamentals</a>, and <a href="https://developers.telnyx.com/api-reference/assistants/create-an-assistant">Telnyx Assistant API</a>.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="voice" class="report-section">
+        <h2>Voice handling and customization</h2>
+        <p class="section-intro">Telnyx offers the widest first-party voice-design controls. Twilio offers strong provider choice inside a simpler relay contract.</p>
+        <div class="table-wrap">
+          <table>
+            <caption>Voice, speech, and call-control capabilities.</caption>
+            <thead><tr><th scope="col">Capability</th><th scope="col">Twilio relay</th><th scope="col">Telnyx TeXML custom</th><th scope="col">Telnyx AI Assistant</th></tr></thead>
+            <tbody>
+              <tr><th scope="row" class="choice-name">US English STT</th><td>Google or Deepgram. Speech models and hints are configurable.</td><td>Any compatible streaming STT. The model uses Deepgram Nova at its public rate.</td><td>Telnyx-hosted models, Whisper variants, Deepgram Flux or Nova, and Azure.</td></tr>
+              <tr><th scope="row" class="choice-name">Turn-taking</th><td>Managed endpointing, backchannel filtering, sensitivity, and speech timeout.</td><td>Team-owned VAD, endpointing, speculative turns, backchannels, and speech queues.</td><td>Managed turn-taking with eager end-of-turn options.</td></tr>
+              <tr><th scope="row" class="choice-name">Barge-in</th><td>Speech, DTMF, any, or none. Interruption events include partial spoken text.</td><td>Team detects speech, cancels generation, clears playback, and repairs state.</td><td>Managed interruption handling inside the assistant runtime.</td></tr>
+              <tr><th scope="row" class="choice-name">TTS providers</th><td>ElevenLabs, Google, and Amazon.</td><td>Any streaming TTS that can return compatible audio. Telnyx TTS is priced in the model.</td><td>Telnyx, AWS, Azure, ElevenLabs, Inworld, Rime, Resemble, Murf, and others listed by Telnyx.</td></tr>
+              <tr><th scope="row" class="choice-name">Voice tuning</th><td>Select provider, model, voice, language, and some normalization controls.</td><td>Maximum control over voice, pronunciation, audio format, chunks, and text shaping.</td><td>Voice settings, speaking plans, noise suppression, and background audio.</td></tr>
+              <tr><th scope="row" class="choice-name">Voice cloning</th><td>ConversationRelay documents an ElevenLabs voice catalog, not a first-party cloning workflow.</td><td>Telnyx Voice Design Lab clones can be used through Telnyx voice products.</td><td>Telnyx and supported provider clones can be selected in assistant settings.</td></tr>
+              <tr><th scope="row" class="choice-name">Dental vocabulary</th><td>STT hints plus custom text normalization and prompts.</td><td>Full STT-provider settings and a team-owned normalization layer.</td><td>Transcription model choice, keyterm boosts, smart formatting, prompts, and tools.</td></tr>
+              <tr><th scope="row" class="choice-name">Noise handling</th><td>Depends on carrier media and selected STT. No relay-specific suppression control found.</td><td>Team can add Telnyx or third-party suppression. It adds cost and tuning work.</td><td>Krisp or DeepFilterNet settings are documented for assistants.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>Voice quality must be tested on the phone</strong>
+          <p>A studio preview hides PSTN bandwidth, dental names, dates, insurance terms, interruptions, speakerphone echo, and background noise.</p>
+        </div>
+
+        <details>
+          <summary>Voice sources</summary>
+          <div class="details-body">
+            <p>Sources: <a href="https://www.twilio.com/docs/voice/twiml/connect/conversationrelay">Twilio ConversationRelay attributes</a>, <a href="https://www.twilio.com/docs/voice/conversationrelay/voice-configuration">Twilio voice selection</a>, <a href="https://developers.telnyx.com/docs/inference/ai-assistants/transcription-settings/index">Telnyx assistant transcription</a>, <a href="https://developers.telnyx.com/docs/voice/voice-design-lab/index">Telnyx Voice Design Lab</a>, and <a href="https://developers.telnyx.com/docs/voice/voice-design-lab/using-custom-voices">Telnyx custom voices</a>.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="integrations" class="report-section">
+        <h2>Scheduling, CRM, EHR, SIP, transfer, and SMS</h2>
+        <p class="section-intro">The carrier should transport calls and invoke narrow tools. Brightview should remain the scheduling system of record.</p>
+        <div class="table-wrap">
+          <table>
+            <caption>Integration approach for the requested systems.</caption>
+            <thead><tr><th scope="col">Integration</th><th scope="col">Recommended boundary</th><th scope="col">Platform effect</th></tr></thead>
+            <tbody>
+              <tr><th scope="row" class="choice-name">Calendar and scheduling</th><td>Brightview API searches eligible slots and commits one confirmed slot with an idempotency key.</td><td>Assistant tools reduce glue code. Both relay paths call the same API from the custom agent.</td></tr>
+              <tr><th scope="row" class="choice-name">Dental PMS or EHR</th><td>Use a Brightview adapter for Dentrix, Open Dental, Eaglesoft, or another selected system.</td><td>No compared vendor removes product-specific permissions, data mapping, and write validation.</td></tr>
+              <tr><th scope="row" class="choice-name">CRM</th><td>Read caller context after identity checks. Write a short call outcome after completion.</td><td>Webhook tools are simplest on the managed assistant. Custom relays offer more state control.</td></tr>
+              <tr><th scope="row" class="choice-name">SIP</th><td>Use SIP for the existing PBX, staff queue, or transfer target when needed.</td><td>All three support SIP paths. Confirm each target and transfer method during the trial.</td></tr>
+              <tr><th scope="row" class="choice-name">Human transfer</th><td>Transfer after repeated failure, urgent symptoms, billing disputes, or caller request.</td><td>Telnyx Assistant has built-in transfer and SIP Refer tools. Relay paths return to call-control markup.</td></tr>
+              <tr><th scope="row" class="choice-name">SMS confirmation</th><td>Send only after a successful booking or reschedule. Include opt-out and 10DLC handling.</td><td>Both vendors have messaging APIs. Telnyx has the lower listed platform rate.</td></tr>
+              <tr><th scope="row" class="choice-name">WebSockets</th><td>Use only on relay paths. Keep connections close to the vendor media region.</td><td>Managed assistant removes Brightview's speech-loop WebSocket.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <details>
+          <summary>Minimum scheduling tool contract</summary>
+          <div class="details-body">
+            <ul>
+              <li><code>identify_caller</code>: verify the caller before returning appointment details.</li>
+              <li><code>list_slots</code>: return a small, current set of eligible slot IDs.</li>
+              <li><code>hold_slot</code>: create a short exclusive hold when the workflow needs one.</li>
+              <li><code>book_slot</code>: recheck and commit only a previously offered slot.</li>
+              <li><code>transfer_to_staff</code>: carry a reason code and a short safe summary.</li>
+              <li><code>send_confirmation</code>: send after the scheduling transaction succeeds.</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <section id="scenarios" class="report-section">
+        <h2>Recommendation by scenario</h2>
+        <p class="section-intro">There is no universal winner. These are the conditions that should change the choice.</p>
+        <div class="scenario-list">
+          <div class="scenario"><h3>Fastest safe pilot</h3><p><strong>Choose Telnyx AI Assistant.</strong> Use a managed Telnyx model first. Keep scheduling writes behind Brightview tools.</p></div>
+          <div class="scenario"><h3>GPT-5.6 Luna is mandatory</h3><p><strong>Choose Telnyx AI Assistant with native managed Luna.</strong> Use a custom endpoint only when exact AI SDK behavior is mandatory.</p></div>
+          <div class="scenario"><h3>Exact AI SDK loop is mandatory</h3><p><strong>Choose Twilio first.</strong> It preserves custom streaming and tools without raw-audio work. Choose TeXML when full audio control or scale savings justify it.</p></div>
+          <div class="scenario"><h3>Existing Twilio estate</h3><p><strong>Choose Twilio ConversationRelay.</strong> Existing numbers, Studio flows, support, staff knowledge, and negotiated rates can outweigh list-price differences.</p></div>
+          <div class="scenario"><h3>Voice cloning matters most</h3><p><strong>Prefer Telnyx.</strong> Its Voice Design Lab and assistant integrations make custom voices a first-party workflow.</p></div>
+          <div class="scenario"><h3>Lowest usage cost at scale</h3><p><strong>Choose TeXML custom media after a load test.</strong> Its component pricing is lowest. Add the cost of a voice-infrastructure team.</p></div>
+          <div class="scenario"><h3>Lowest engineering risk</h3><p><strong>Choose the managed Telnyx assistant.</strong> It has the smallest voice-runtime code surface and simplest operating model.</p></div>
+          <div class="scenario"><h3>Lowest vendor lock-in</h3><p><strong>Choose TeXML custom media.</strong> Keep audio providers, the model, and tools portable. Accept custom runtime maintenance.</p></div>
+        </div>
+      </section>
+
+      <section id="validation" class="report-section">
+        <h2>Validation plan before selection</h2>
+        <p class="section-intro">Run the same inbound call set on the managed Telnyx assistant and Twilio. Add TeXML when control or scale justifies the build.</p>
+        <div class="test-grid">
+          <div class="test-item"><strong>Latency</strong><span>At least 200 calls per configuration. Report greeting, tool-free, and tool-turn p50 and p95.</span></div>
+          <div class="test-item"><strong>Speech accuracy</strong><span>Test names, dates, phone numbers, insurance names, procedure names, accents, and speakerphone audio.</span></div>
+          <div class="test-item"><strong>Interruption</strong><span>Interrupt greetings, slot lists, confirmations, and transfers. Confirm audio stops and state remains correct.</span></div>
+          <div class="test-item"><strong>Scheduling safety</strong><span>Test stale slots, double submissions, time-zone boundaries, provider rules, and backend timeouts.</span></div>
+          <div class="test-item"><strong>Identity</strong><span>Test caller-ID matches, shared family numbers, unknown callers, and failed verification.</span></div>
+          <div class="test-item"><strong>Recovery</strong><span>Disconnect the model, speech service, WebSocket, scheduling API, and staff transfer target.</span></div>
+          <div class="test-item"><strong>Cost</strong><span>Capture billed minutes, tokens, model cache use, SMS, transfers, retries, and failed-call charges.</span></div>
+          <div class="test-item"><strong>Outcome</strong><span>Measure cost per completed appointment task, not only cost per minute.</span></div>
+        </div>
+        <div class="callout">
+          <strong>Decision gate</strong>
+          <p>Select the lowest-operations choice that passes scheduling safety and p95 latency. A cheaper minute is irrelevant when it causes repeat calls or manual cleanup.</p>
+        </div>
+        <details>
+          <summary>Healthcare privacy gate, not included in the ranking</summary>
+          <div class="details-body">
+            <p>Compliance is not a selection priority for this report. It remains a release gate before real patient data enters any path.</p>
+            <div class="table-wrap">
+              <table>
+                <caption>Minimum privacy review for every option.</caption>
+                <thead><tr><th scope="col">Gate</th><th scope="col">Twilio relay</th><th scope="col">TeXML custom</th><th scope="col">Telnyx Assistant</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">Contracts</th><td>Confirm BAA eligibility for Voice, relay, speech providers, and support access.</td><td>Confirm Telnyx, STT, TTS, OpenRouter, OpenAI, and runtime terms.</td><td>Confirm Assistant, model, speech, tool, and subprocessor coverage.</td></tr>
+                  <tr><th scope="row">PHI boundary</th><td>Document every transcript, model, tool, log, and fallback hop.</td><td>Largest boundary. The team owns all vendors and observability.</td><td>Smaller application boundary, but managed services still need review.</td></tr>
+                  <tr><th scope="row">Retention and redaction</th><td>Set transcript, debug log, trace, and support-data retention.</td><td>Build redaction and short retention into every custom trace.</td><td>Configure session, trace, tool, and support-data retention.</td></tr>
+                  <tr><th scope="row">Recording</th><td>Keep disabled.</td><td>Keep disabled.</td><td>Keep disabled.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Do not send real PHI until legal and security teams approve the complete data path.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="sources" class="report-section">
+        <h2>Primary sources and supporting evidence</h2>
+        <p class="section-intro">Vendor pages support product and pricing claims. Vendor latency tests are labeled as such. Dental usage sources are directional.</p>
+        <ol class="source-list">
+          <li><a href="https://www.twilio.com/en-us/voice/pricing/us">Twilio US Voice pricing</a><span>Inbound local rate, number price, and ConversationRelay rate.</span></li>
+          <li><a href="https://www.twilio.com/docs/voice/twiml/connect/conversationrelay">Twilio ConversationRelay reference</a><span>Providers, voices, interruption, DTMF, languages, and session settings.</span></li>
+          <li><a href="https://www.twilio.com/docs/voice/conversationrelay/websocket-messages">Twilio WebSocket messages</a><span>Prompts, token streaming, interruptions, errors, and reconnection behavior.</span></li>
+          <li><a href="https://www.twilio.com/en-us/products/conversational-ai/conversationrelay">Twilio ConversationRelay product page</a><span>Vendor median and p95 latency figures.</span></li>
+          <li><a href="https://www.twilio.com/docs/voice/voice-insights/conversation-relay-summary">Twilio relay insights</a><span>Network, STT, application, and TTS latency definitions.</span></li>
+          <li><a href="https://telnyx.com/pricing/voice-ai-agents">Telnyx Voice AI pricing</a><span>Voice engine, telephony, number, included components, and model estimate.</span></li>
+          <li><a href="https://telnyx.com/pricing/voice-api">Telnyx Voice API pricing</a><span>TeXML fee, inbound SIP, transfer, relay, speech, and streaming prices.</span></li>
+          <li><a href="https://developers.telnyx.com/docs/voice/programmable-voice/texml-verbs/stream">Telnyx TeXML Stream</a><span>Raw media tracks, codecs, bidirectional audio, and WebSocket reconnection.</span></li>
+          <li><a href="https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming">Telnyx media streaming</a><span>Audio commands, marks, queue clearing, DTMF, and error frames.</span></li>
+          <li><a href="https://developers.telnyx.com/docs/inference/ai-assistants/no-code-voice-assistant">Telnyx Voice Assistant quickstart</a><span>Managed models, speech providers, noise handling, and configuration.</span></li>
+          <li><a href="https://developers.telnyx.com/docs/inference/ai-assistants/custom-llm">Telnyx custom LLM providers</a><span>OpenAI-compatible custom endpoint requirements.</span></li>
+          <li><a href="https://telnyx.com/release-notes/glm-5-2-gpt-5-6-luna-sol-voice-ai-assistants">Telnyx managed GPT-5.6 Luna</a><span>Native model availability without a separate OpenAI contract or key.</span></li>
+          <li><a href="https://developers.telnyx.com/docs/inference/ai-assistants/workflows">Telnyx assistant workflows</a><span>Webhook, transfer, SIP Refer, handoff, DTMF, and hangup tools.</span></li>
+          <li><a href="https://developers.telnyx.com/api-reference/assistants/create-an-assistant">Telnyx Create Assistant API</a><span>External models, fallback settings, tools, greetings, and telephony configuration.</span></li>
+          <li><a href="https://developers.telnyx.com/docs/voice/voice-design-lab/index">Telnyx Voice Design Lab</a><span>Voice design and cloning options.</span></li>
+          <li><a href="https://developers.openai.com/api/docs/models/gpt-5.6-luna">OpenAI GPT-5.6 Luna</a><span>Current official input, cached-input, and output token prices.</span></li>
+          <li><a href="https://openrouter.ai/pricing">OpenRouter pricing</a><span>Current pay-as-you-go platform fee and BYOK allowances.</span></li>
+          <li><a href="https://ainora.lt/blog/dental-practice-phone-call-statistics-2026">Ainora dental phone statistics</a><span>Directional inbound volume and handle-time range.</span></li>
+          <li><a href="https://www.getweave.com/5-tips-to-nourish-client-relationships/">Weave dental phone estimate</a><span>Directional total and inbound daily call volume.</span></li>
+          <li><a href="https://blog.callmydoc.com/new-blog-1/patient-phone-communication-2026">CallMyDoc patient phone benchmark</a><span>Large medical dataset and three-minute receptionist assumption.</span></li>
+          <li><a href="https://learn.microsoft.com/en-us/azure/well-architected/architect-role/architecture-decision-record">Microsoft architecture decision records</a><span>Context, options, tradeoffs, outcome, confidence, and consequences.</span></li>
+          <li><a href="https://www.nngroup.com/articles/progressive-disclosure/">NN/g progressive disclosure</a><span>Show primary information first and expose secondary details on request.</span></li>
+          <li><a href="https://m2.material.io/design/components/data-tables.html">Material data tables</a><span>Use tables to support scanning, patterns, and comparison.</span></li>
+        </ol>
+      </section>
+
+      <footer class="footer-note">
+        This is a planning model, not a vendor quote. Confirm account-specific prices, contracts, carrier fees, and product availability before purchase.
+      </footer>
+    </article>
+  </main>
+
+  <script>
+    (() => {
+      const formatMoney = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+      const formatNumber = new Intl.NumberFormat("en-US");
+      const inputs = {
+        calls: document.querySelector("#calls-per-day"),
+        days: document.querySelector("#operating-days"),
+        minutes: document.querySelector("#minutes-per-call")
+      };
+      document.querySelector("#cost-calculator").addEventListener("submit", (event) => event.preventDefault());
+      const rates = {
+        twilio: { perMinute: 0.080399, number: 1.15 },
+        telnyxTeXML: { perMinute: 0.032399, number: 1 },
+        telnyxLuna: { perMinute: 0.055, number: 1 },
+        telnyxKimi: { perMinute: 0.0572, number: 1 },
+        telnyxCustom: { perMinute: 0.055099, number: 1 }
+      };
+
+      function calculate() {
+        const invalidInput = Object.values(inputs).find((input) => !input.checkValidity() || input.value === "");
+        const error = document.querySelector("#calculator-error");
+        if (invalidInput) {
+          error.hidden = false;
+          document.querySelector("#calculator-status").textContent = "Cost estimate not updated. Enter values within each stated range.";
+          return;
+        }
+        error.hidden = true;
+        const dailyCalls = Number(inputs.calls.value);
+        const days = Number(inputs.days.value);
+        const duration = Number(inputs.minutes.value);
+        const calls = Math.round(dailyCalls * days);
+        const connectedMinutes = calls * duration;
+        const totals = {
+          twilio: formatMoney.format(connectedMinutes * rates.twilio.perMinute + rates.twilio.number),
+          texml: formatMoney.format(connectedMinutes * rates.telnyxTeXML.perMinute + rates.telnyxTeXML.number),
+          luna: formatMoney.format(connectedMinutes * rates.telnyxLuna.perMinute + rates.telnyxLuna.number),
+          kimi: formatMoney.format(connectedMinutes * rates.telnyxKimi.perMinute + rates.telnyxKimi.number),
+          custom: formatMoney.format(connectedMinutes * rates.telnyxCustom.perMinute + rates.telnyxCustom.number)
+        };
+        document.querySelector("#monthly-minutes").textContent = `${formatNumber.format(connectedMinutes)} connected minutes`;
+        document.querySelector("#monthly-calls").textContent = `${formatNumber.format(calls)} connected calls per month`;
+        document.querySelector("#twilio-total").textContent = totals.twilio;
+        document.querySelector("#telnyx-texml-total").textContent = totals.texml;
+        document.querySelector("#telnyx-luna-total").textContent = totals.luna;
+        document.querySelector("#telnyx-kimi-total").textContent = totals.kimi;
+        document.querySelector("#telnyx-custom-total").textContent = totals.custom;
+        document.querySelector("#calculator-status").textContent = `${formatNumber.format(connectedMinutes)} connected minutes. Twilio ${totals.twilio}. TeXML ${totals.texml}. Telnyx native Luna ${totals.luna}. Managed Kimi ${totals.kimi}. Custom Luna ${totals.custom}.`;
+      }
+
+      Object.values(inputs).forEach((input) => input.addEventListener("input", () => {
+        document.querySelectorAll(".preset").forEach((button) => button.setAttribute("aria-pressed", "false"));
+        calculate();
+      }));
+
+      document.querySelectorAll(".preset").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".preset").forEach((item) => item.setAttribute("aria-pressed", "false"));
+          button.setAttribute("aria-pressed", "true");
+          inputs.calls.value = button.dataset.calls;
+          inputs.minutes.value = button.dataset.minutes;
+          inputs.days.value = "20.8";
+          calculate();
+        });
+      });
+
+      const detailsButton = document.querySelector("#toggle-details");
+      detailsButton.addEventListener("click", () => {
+        const shouldOpen = detailsButton.getAttribute("aria-pressed") !== "true";
+        document.querySelectorAll("details").forEach((item) => { item.open = shouldOpen; });
+        detailsButton.setAttribute("aria-pressed", String(shouldOpen));
+        detailsButton.textContent = shouldOpen ? "Collapse evidence" : "Expand evidence";
+      });
+
+      calculate();
+    })();
+  </script>
+</body>
+</html>
