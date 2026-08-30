@@ -2,6 +2,8 @@
 
 Research checked: 20 August 2026.
 
+Implementation update: 23 August 2026. The dashboard gateway now uses local matching first. Fallback uses `gpt-5.6-luna-fast` with reasoning set to `none`. Deepgram Flux handles speech recognition. Partial transcripts do not change conversation state.
+
 Primary sources: OpenAI voice-agent and latency docs, Twilio ConversationRelay, Deepgram Flux, Telnyx Conversation Relay and AI Assistants, LiveKit speech, ITU-T G.114. Measured numbers are from this repo’s `test-telnyx-conversation` `--confirm` logs.
 
 ## Diagnosis of this project
@@ -23,7 +25,7 @@ OpenAI’s own latency guide: generating tokens is usually the slowest step; **d
 
 `reasoning.effort` **none** is listed for “latency-critical tasks” including **voice and classification**. `low` already adds delay. Terra is a reasoning coding model. [Reasoning models](https://developers.openai.com/api/docs/guides/reasoning)
 
-The 400 ms partial debounce helped identity `gap_ms` (down from ~6–9s). It did **not** help `intent_ms`. That is the remaining loop.
+The old 400 ms partial debounce helped identity `gap_ms`. It could also commit a revised transcript too early. The gateway now waits for a final transcript before it changes state.
 
 ## Three architectures (official split)
 
@@ -46,7 +48,7 @@ A 2026 enterprise tutorial measured a streaming cascade (Deepgram STT → stream
 
 Twilio’s own CR guidance: stream LLM tokens to ConversationRelay as they arrive. Waiting for the full LLM text adds delay. [CR best practices](https://www.twilio.com/docs/voice/conversationrelay/best-practices)
 
-We send one complete template after Terra returns. There is nothing to stream from the model because the model is not writing speech. Streaming only helps if we start **speaking a known line** before classification finishes, or we use a fast model that emits the next template id in tens of milliseconds.
+The old path sent one complete template after Terra returned. The current gateway still keeps speech in server templates. Streaming helps only if a known line starts before classification ends, or a fast model selects a template quickly.
 
 ### 2. Eager end of turn, not “wait for last:true”
 
@@ -60,7 +62,7 @@ Deepgram Flux sends:
 
 Telnyx AI Assistants with Deepgram Flux enable this by default. They start a tentative LLM call early and **do not play audio until the turn is confirmed**. Claimed median savings ~150 ms, tail ~350 ms. That is a rounding error next to our 1.7–3.8s model. [Telnyx Flux note](https://telnyx.com/release-notes/automatic-eager-end-of-turn-deepgram-flux)
 
-Our Conversation Relay path only gets `prompt` partials and `last: true`. We debounce 400 ms. We still call Terra. Eager EOT without a fast drafter does not feel live.
+Our Conversation Relay path gets partial prompts and final prompts. Partials now update only telemetry and reply timers. Final prompts use local matching first, then Luna.
 
 ### 3. A small model on the hot path
 
@@ -69,7 +71,7 @@ Production stacks split models:
 - **Turn model:** tiny/fast, no reasoning. Classify yes/no/slot. Target tens to a few hundred ms.
 - **Optional slow model:** only for messy language.
 
-`gpt-5.6-terra` with structured output and reasoning is a coding agent. It is the wrong tool for “Yeah I’m Oliver.” The proxy also requires streaming (`Stream must be set to true`). That is another sign this stack is for agents, not phone turns.
+The former `gpt-5.6-terra` path was too slow for short voice turns. The gateway now uses Luna with no reasoning for fallback classification.
 
 Deepgram’s own cost note: use a **smaller/faster model for EagerEndOfTurn drafts**, full LLM only on EndOfTurn.
 
@@ -109,7 +111,7 @@ Carrier work already paid off: voice quality, simpler bill, `<Say>` on answer, c
 1. **No LLM on closed turns.** Local matcher first. In the **product**, bind names and offered dates to the live case. Do not ship sandbox literals “Oliver” and “26th” as global answers. OpenAI: hard-code constrained outputs. ADR 001 already allows this. Target `intent_ms` near 0.
 
 Shipped in the sandbox and gateway as of 21 August 2026. See [telnyx-sandbox-current-architecture.md](telnyx-sandbox-current-architecture.md).
-2. **Leftovers only: a small classifier with reasoning off.** gpt-4o-mini or an 8B Groq model, tiny schema. Deepgram’s Flux demo uses gpt-4o-mini. [gpt-4o-mini](https://developers.openai.com/api/docs/models/gpt-4o-mini)
+2. **Leftovers only: a small classifier with reasoning off.** Shipped with `gpt-5.6-luna-fast` through the existing local proxy. The schema and prompt include only the active phase.
 3. **Speculative canned TTS.** On a stable “yes” partial, start the known next line immediately. Abort if the transcript changes. LiveKit: preemptive generation. [LiveKit speech](https://docs.livekit.io/agents/multimodality/audio/)
 4. **Stream template clauses** (`last: false` then `last: true`) so TTS can start on the first phrase.
 5. **Semantic EOT** (Twilio Flux / Deepgram Flux) only after the hot-path model is fast. Telnyx Conversation Relay does not document `eotThreshold` in TeXML.
@@ -117,7 +119,7 @@ Shipped in the sandbox and gateway as of 21 August 2026. See [telnyx-sandbox-cur
 
 ## Stop doing
 
-- Calling `gpt-5.6-terra` on every yes/no
+- Calling a reasoning model on every yes/no
 - Treating Conversation Relay `last: true` as the start of work
 - Expecting ngrok + Codex proxy + structured output to feel like a receptionist
 - Another carrier comparison until `intent_ms` is under 300 ms on the same phone
