@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local open-pstack test (do not commit)
+.agents/vendor/
+.agents/skills/pstack
