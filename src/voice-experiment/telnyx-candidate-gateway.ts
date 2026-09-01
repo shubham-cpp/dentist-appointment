@@ -7,7 +7,11 @@ import {
 } from "@/lib/voice-call-context";
 import { voiceGatewayInternalSecretHeader } from "@/lib/voice-gateway-internal";
 import type { VoiceAttemptStore, VoiceAttemptTransportStatus } from "@/voice-gateway/attempt-store";
-import { createVoiceSchedulingAuthority, type VoiceSchedulingCommand } from "./scheduling-authority";
+import {
+  createVoiceSchedulingAuthority,
+  type VoiceSchedulingCommand,
+  type VoiceSchedulingResult,
+} from "./scheduling-authority";
 import type { TelnyxCandidateCallController } from "./telnyx-call-controller";
 import { TelnyxCandidatePreflightError } from "./telnyx-candidate-preflight";
 
@@ -58,6 +62,49 @@ const toolBodies = {
   request_staff_follow_up: z.object({ operationId, reason: z.string().min(1).max(200) }).strict(),
 } as const;
 
+const messageHistory = z.array(z.object({
+  content: z.string().optional(),
+  role: z.string(),
+}).passthrough());
+const automaticHangupFallbackMs = 12_000;
+const closingPlaybackGraceMs = 3_000;
+
+type ScheduleHangup = (
+  delayMs: number,
+  task: () => Promise<void>,
+) => () => void;
+
+type PendingHangup = {
+  assistantText?: string;
+  cancelFallback: () => void;
+  cancelPlayback?: () => void;
+};
+
+function defaultScheduleHangup(delayMs: number, task: () => Promise<void>) {
+  const timer = setTimeout(() => {
+    void task().catch(() => undefined);
+  }, delayMs);
+  return () => clearTimeout(timer);
+}
+
+function callerAskedToEndCall(content: string) {
+  const spacing = "[\\s,.!]+";
+  const preface = `(?:(?:yeah|yes|yep|ok(?:ay)?|please|sure|thanks|thank${spacing}you|go${spacing}ahead|and)${spacing})*`;
+  const endCall = `(?:end|finish|disconnect)(?:${spacing}(?:the|this|our))?${spacing}call`;
+  const hangUp = `(?:you${spacing}can${spacing})?hang${spacing}up(?:${spacing}(?:the|this)${spacing}call)?`;
+  const politeQuestion = `(?:can|could|would|will)${spacing}you(?:${spacing}please)?${spacing}(?:${endCall}|hang${spacing}up)`;
+  return new RegExp(
+    `^${preface}(?:${politeQuestion}|(?:please${spacing})?(?:${endCall}|${hangUp}))(?:${spacing}now)?[\\s,.!?]*$`,
+    "i",
+  ).test(content.trim());
+}
+
+function isTerminalSchedulingResult(result: VoiceSchedulingResult) {
+  return result.type === "change_committed"
+    || result.type === "staff_follow_up_recorded"
+    || (result.type === "identity_recorded" && result.result === "wrong_person");
+}
+
 function sameSecret(provided: string | undefined, expected: string) {
   if (!provided) return false;
   const left = Buffer.from(provided);
@@ -84,12 +131,18 @@ export function createTelnyxCandidateGateway(options: {
   };
   controller: TelnyxCandidateCallController;
   preflight(): Promise<void>;
+  scheduleHangup?: ScheduleHangup;
   validateRequest(rawBody: string, timestamp: string, signature: string): boolean;
 }) {
   const app = Fastify({ logger: false });
   const rawBodies = new WeakMap<object, string>();
   const processedEvents = new Set<string>();
   const schedulingByAttempt = new Map<string, ReturnType<typeof createVoiceSchedulingAuthority>>();
+  const lastAssistantText = new Map<string, string>();
+  const pendingHangups = new Map<string, PendingHangup>();
+  const endingAttempts = new Set<string>();
+  const endedAttempts = new Set<string>();
+  const scheduleHangup = options.scheduleHangup ?? defaultScheduleHangup;
   let qualificationSession: {
     authority: ReturnType<typeof createVoiceSchedulingAuthority>;
     result?: VoiceCallResult;
@@ -115,6 +168,61 @@ export function createTelnyxCandidateGateway(options: {
     const value = request.headers[voiceGatewayInternalSecretHeader];
     return sameSecret(Array.isArray(value) ? value[0] : value, options.config.internalSecret);
   }
+
+  function clearPendingHangup(attemptId: string) {
+    const pending = pendingHangups.get(attemptId);
+    pending?.cancelFallback();
+    pending?.cancelPlayback?.();
+    pendingHangups.delete(attemptId);
+  }
+
+  async function endAttempt(attemptId: string) {
+    if (endingAttempts.has(attemptId) || endedAttempts.has(attemptId)) return;
+    endingAttempts.add(attemptId);
+    try {
+      await options.controller.complete(attemptId);
+      endedAttempts.add(attemptId);
+      clearPendingHangup(attemptId);
+    } finally {
+      endingAttempts.delete(attemptId);
+    }
+  }
+
+  function armAutomaticHangup(attemptId: string) {
+    if (pendingHangups.has(attemptId) || endedAttempts.has(attemptId)) return;
+    pendingHangups.set(attemptId, {
+      assistantText: lastAssistantText.get(attemptId),
+      cancelFallback: scheduleHangup(
+        automaticHangupFallbackMs,
+        () => endAttempt(attemptId),
+      ),
+    });
+  }
+
+  function processMessageHistory(attemptId: string, payload: Record<string, unknown>) {
+    const parsed = messageHistory.safeParse(payload.message_history);
+    if (!parsed.success) return;
+    const latest = parsed.data.at(-1);
+    if (!latest) return;
+    if (latest.role === "user" && latest.content && callerAskedToEndCall(latest.content)) {
+      armAutomaticHangup(attemptId);
+      return;
+    }
+    if (latest.role !== "assistant" || !latest.content) return;
+    lastAssistantText.set(attemptId, latest.content);
+    const pending = pendingHangups.get(attemptId);
+    if (!pending || pending.assistantText === latest.content) return;
+    pending.assistantText = latest.content;
+    pending.cancelPlayback?.();
+    pending.cancelPlayback = scheduleHangup(
+      closingPlaybackGraceMs,
+      () => endAttempt(attemptId),
+    );
+  }
+
+  app.addHook("onClose", async () => {
+    for (const attemptId of pendingHangups.keys()) clearPendingHangup(attemptId);
+  });
 
   app.get("/health", async () => ({ runtime: "telnyx-candidate", status: "ok" }));
   app.get("/internal/preflight", async (request, reply) => {
@@ -224,6 +332,13 @@ export function createTelnyxCandidateGateway(options: {
     processedEvents.add(event.data.data.id);
     const status = eventTransportStatus(event.data.data.event_type, event.data.data.payload);
     if (status) options.attempts.updateStatus(attempt.id, attempt.callSid, status);
+    if (event.data.data.event_type === "call.ai_gather.message_history_updated") {
+      processMessageHistory(attempt.id, event.data.data.payload);
+    }
+    if (event.data.data.event_type === "call.hangup") {
+      endedAttempts.add(attempt.id);
+      clearPendingHangup(attempt.id);
+    }
     await recorder.correlate({
       ...(event.data.data.payload.assistant_id ? { assistantId: event.data.data.payload.assistant_id } : {}),
       ...(event.data.data.payload.conversation_id ? { conversationId: event.data.data.payload.conversation_id } : {}),
@@ -305,6 +420,9 @@ export function createTelnyxCandidateGateway(options: {
           payload: { name: command.name, operationId: command.operationId, result },
           type: "tool.completed",
         });
+      }
+      if (attempt && isTerminalSchedulingResult(result)) {
+        armAutomaticHangup(attempt.id);
       }
       return result;
     } catch (error) {

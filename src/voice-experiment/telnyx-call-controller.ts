@@ -22,6 +22,7 @@ export type TelnyxCandidateCallClient = {
 };
 
 export type TelnyxCandidateCallController = {
+  complete(attemptId: string): Promise<void>;
   evidence(attemptId: string): VoiceEvidenceRecorder | undefined;
   start(input: { context: VoiceCallContext; requestId: string }): Promise<{
     attemptId: string;
@@ -46,8 +47,30 @@ export function createTelnyxCandidateCallController(options: {
   preflight(): Promise<void>;
 }): TelnyxCandidateCallController {
   const evidence = new Map<string, VoiceEvidenceRecorder>();
+  const automaticHangups = new Map<string, Promise<void>>();
 
   return {
+    async complete(attemptId) {
+      const inFlight = automaticHangups.get(attemptId);
+      if (inFlight) return inFlight;
+      const attempt = options.attempts.getAttempt(attemptId);
+      if (!attempt?.callSid) return;
+      const callSid = attempt.callSid;
+      const operation = (async () => {
+        await options.client.hangup(
+          callSid,
+          `${attempt.requestId}-automatic-hangup`,
+        );
+        await options.lease.release(attemptId);
+      })();
+      automaticHangups.set(attemptId, operation);
+      try {
+        await operation;
+      } catch (error) {
+        automaticHangups.delete(attemptId);
+        throw error;
+      }
+    },
     evidence(attemptId) {
       return evidence.get(attemptId);
     },

@@ -126,3 +126,48 @@ test("releases a definite rejected Dial so the operator can retry", async () => 
   });
   assert.equal(retried.callControlId, "v3:retry-call");
 });
+
+test("requests an idempotent automatic hangup without marking the call canceled", async () => {
+  const attempts = new VoiceAttemptStore(() => Date.now(), 0);
+  const hangups: Array<{ callControlId: string; commandId: string }> = [];
+  const controller = createTelnyxCandidateCallController({
+    attempts,
+    client: {
+      async dial() {
+        return {
+          callControlId: "v3:automatic-hangup",
+          callLegId: "automatic-hangup-leg",
+          callSessionId: "automatic-hangup-session",
+        };
+      },
+      async hangup(callControlId, commandId) {
+        hangups.push({ callControlId, commandId });
+      },
+    },
+    config: {
+      artifactsRoot: await mkdtemp(join(tmpdir(), "telnyx-controller-")),
+      assistantId: "assistant-test",
+      assistantVersionId: "version-test",
+      callToNumber: "+12025550111",
+      connectionId: "connection-test",
+      publicBaseUrl: "https://voice.example.test",
+      telnyxPhoneNumber: "+12025550112",
+    },
+    lease: new MemoryControlledCallLease(() => Date.now(), 60_000),
+    async preflight() {},
+  });
+  const started = await controller.start({
+    context: createVoiceCallContext(),
+    requestId: "66666666-6666-4666-8666-666666666666",
+  });
+  attempts.updateStatus(started.attemptId, started.callControlId, "answered");
+
+  await controller.complete(started.attemptId);
+  await controller.complete(started.attemptId);
+
+  assert.deepEqual(hangups, [{
+    callControlId: "v3:automatic-hangup",
+    commandId: "66666666-6666-4666-8666-666666666666-automatic-hangup",
+  }]);
+  assert.equal(attempts.getAttempt(started.attemptId)?.transportStatus, "answered");
+});
