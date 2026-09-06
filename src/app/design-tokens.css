@@ -46,6 +46,7 @@
   --text-muted: var(--muted);
   --text-subtle: #53667d;
   --text-on-nav: #d8e4f2;
+  --overlay-scrim: color-mix(in srgb, var(--nav-deep) 42%, transparent);
 }
 
 html {

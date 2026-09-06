@@ -20,13 +20,14 @@ export type VoiceAttemptTransportStatus = ControlledVoiceAttemptTransportStatus;
 
 type VoiceAttempt = {
   callContext: VoiceCallContext;
-  callSid?: string;
+  providerCallId?: string;
   createdAt: string;
   expiresAt: number;
   id: string;
   lastSequenceNumber?: number;
   outcome: VoiceAttemptOutcome;
   processInstanceId: string;
+  relayAuthorityActive: boolean;
   requestId: string;
   relayToken: string;
   result?: VoiceCallResult;
@@ -44,7 +45,7 @@ function statusLabel(status: VoiceAttemptTransportStatus) {
   return {
     requested: "Call requested",
     creating: "Creating controlled call",
-    creation_uncertain: "Twilio did not confirm call creation",
+    creation_uncertain: "Provider did not confirm call creation",
     initiated: "Call initiated",
     ringing: "Ringing",
     answered: "Connected",
@@ -74,7 +75,7 @@ export class VoiceAttemptStore {
 
   constructor(
     private readonly now: () => number = Date.now,
-    private readonly cooldownMs = 10 * 60 * 1000,
+    private readonly cooldownMs = 4 * 60 * 1000,
     private readonly attemptLifetimeMs = 10 * 60 * 1000,
   ) {}
 
@@ -93,6 +94,7 @@ export class VoiceAttemptStore {
       id: `voice_${randomUUID()}`,
       outcome: "none",
       processInstanceId: this.processInstanceId,
+      relayAuthorityActive: true,
       requestId,
       relayToken: randomBytes(32).toString("base64url"),
       sessionStatus: "not_connected",
@@ -118,7 +120,7 @@ export class VoiceAttemptStore {
     }
 
     if (this.now() - this.lastAttemptAt < this.cooldownMs) {
-      throw new Error("Wait ten minutes before starting another controlled call.");
+      throw new Error("Wait four minutes before starting another controlled call.");
     }
   }
 
@@ -134,22 +136,33 @@ export class VoiceAttemptStore {
     return attempt ? cloneAttempt(attempt) : undefined;
   }
 
+  hasActiveRelayAuthority(attemptId: string, relayToken: string) {
+    this.removeExpiredAttempts();
+    const attempt = this.attempts.get(attemptId);
+    return Boolean(
+      attempt
+      && attempt.relayToken === relayToken
+      && attempt.relayAuthorityActive
+      && isControlledVoiceAttemptActive(attempt),
+    );
+  }
+
   getCallContextByRelayToken(relayToken: string) {
     return structuredClone(this.requireAttemptByRelayToken(relayToken).callContext);
   }
 
-  getActiveCallSids() {
+  getActiveProviderCallIds() {
     this.removeExpiredAttempts();
     return [...this.attempts.values()].flatMap((attempt) => (
-      attempt.callSid && isControlledVoiceAttemptActive(attempt) ? [attempt.callSid] : []
+      attempt.providerCallId && isControlledVoiceAttemptActive(attempt) ? [attempt.providerCallId] : []
     ));
   }
 
-  getActiveCallStops() {
+  getActiveProviderCallStops() {
     this.removeExpiredAttempts();
     return [...this.attempts.values()].flatMap((attempt) => (
-      attempt.callSid && isControlledVoiceAttemptActive(attempt)
-        ? [{ attemptId: attempt.id, callSid: attempt.callSid }]
+      attempt.providerCallId && isControlledVoiceAttemptActive(attempt)
+        ? [{ attemptId: attempt.id, providerCallId: attempt.providerCallId }]
         : []
     ));
   }
@@ -175,24 +188,29 @@ export class VoiceAttemptStore {
     return this.updateTransportStatus(attemptId, "creating");
   }
 
-  bindCallSid(attemptId: string, callSid: string) {
+  bindProviderCallId(attemptId: string, providerCallId: string) {
     const attempt = this.requireAttempt(attemptId);
 
-    if (attempt.callSid && attempt.callSid !== callSid) {
+    if (attempt.providerCallId && attempt.providerCallId !== providerCallId) {
       throw new Error("The callback does not match the controlled call.");
     }
 
-    if (attempt.callSid === callSid) return cloneAttempt(attempt);
+    if (attempt.providerCallId === providerCallId) return cloneAttempt(attempt);
 
-    attempt.callSid = callSid;
+    attempt.providerCallId = providerCallId;
     this.touch(attempt);
     return cloneAttempt(attempt);
   }
 
-  updateStatus(attemptId: string, callSid: string, status: VoiceAttemptTransportStatus, sequenceNumber?: number) {
+  updateStatus(
+    attemptId: string,
+    providerCallId: string,
+    status: VoiceAttemptTransportStatus,
+    sequenceNumber?: number,
+  ) {
     const attempt = this.requireAttempt(attemptId);
 
-    if (attempt.callSid && attempt.callSid !== callSid) {
+    if (attempt.providerCallId && attempt.providerCallId !== providerCallId) {
       throw new Error("The callback does not match the controlled call.");
     }
 
@@ -204,7 +222,7 @@ export class VoiceAttemptStore {
       attempt.lastSequenceNumber = sequenceNumber;
     }
 
-    if (!attempt.callSid) attempt.callSid = callSid;
+    if (!attempt.providerCallId) attempt.providerCallId = providerCallId;
 
     if (attempt.transportStatus === "cancel_requested" && isControlledVoiceAttemptActive({
       ...this.toView(attempt),
@@ -220,10 +238,13 @@ export class VoiceAttemptStore {
     return this.updateTransportStatus(attemptId, status);
   }
 
-  bindRelaySession(relayToken: string, callSid: string, sessionId: string) {
+  bindRelaySession(relayToken: string, providerCallId: string, sessionId: string) {
     const attempt = this.requireAttemptByRelayToken(relayToken);
+    if (!this.hasActiveRelayAuthority(attempt.id, relayToken)) {
+      throw new Error("The Relay token is not available.");
+    }
 
-    if (attempt.callSid !== callSid) {
+    if (attempt.providerCallId !== providerCallId) {
       throw new Error("The Relay session does not match the controlled call.");
     }
 
@@ -299,6 +320,8 @@ export class VoiceAttemptStore {
   }
 
   markCancelRequested(attemptId: string) {
+    const attempt = this.requireAttempt(attemptId);
+    attempt.relayAuthorityActive = false;
     return this.updateTransportStatus(attemptId, "cancel_requested");
   }
 
@@ -310,19 +333,30 @@ export class VoiceAttemptStore {
     const attempt = this.requireAttempt(attemptId);
     if (attempt.outcome === "none") attempt.outcome = "unknown";
     if (attempt.transportStatus === "cancel_requested") {
-      this.addEvent(attempt, "Twilio did not confirm call creation");
+      this.addEvent(attempt, "Provider did not confirm call creation");
       return cloneAttempt(attempt);
     }
     return this.updateTransportStatus(attemptId, "creation_uncertain");
   }
 
+  markTerminationUncertain(attemptId: string) {
+    return this.updateTransportStatus(attemptId, "unknown");
+  }
+
+  revokeRelayAuthority(attemptId: string) {
+    const attempt = this.requireAttempt(attemptId);
+    attempt.relayAuthorityActive = false;
+    this.touch(attempt);
+    return cloneAttempt(attempt);
+  }
+
   completeFailedRelaySessionBeforeSetup(
     attemptId: string,
-    callSid: string,
+    providerCallId: string,
     sessionId: string,
   ) {
     const attempt = this.requireAttempt(attemptId);
-    if (attempt.callSid !== callSid || attempt.sessionId) {
+    if (attempt.providerCallId !== providerCallId || attempt.sessionId) {
       throw new Error("The failed Relay completion does not match an unbound controlled session.");
     }
 
@@ -338,12 +372,12 @@ export class VoiceAttemptStore {
 
   completeRelaySession(
     attemptId: string,
-    callSid: string,
+    providerCallId: string,
     sessionId: string,
     sessionStatus: "completed" | "ended" | "failed",
   ) {
     const attempt = this.requireAttempt(attemptId);
-    if (attempt.callSid !== callSid || attempt.sessionId !== sessionId) {
+    if (attempt.providerCallId !== providerCallId || attempt.sessionId !== sessionId) {
       throw new Error("The Relay completion does not match the controlled session.");
     }
 
@@ -469,6 +503,9 @@ export class VoiceAttemptStore {
     }
 
     attempt.transportStatus = status;
+    if (isControlledVoiceAttemptTransportTerminal(status)) {
+      attempt.relayAuthorityActive = false;
+    }
     this.markTerminalOutcome(attempt, status);
     this.addEvent(attempt, statusLabel(status));
     return cloneAttempt(attempt);

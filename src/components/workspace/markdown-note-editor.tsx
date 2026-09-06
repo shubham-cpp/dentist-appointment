@@ -175,7 +175,7 @@ export function MarkdownNoteEditor({ initialValue, onChange }: MarkdownNoteEdito
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     extensions: [
-      StarterKit.configure({ heading: { levels: [3] } }),
+      StarterKit.configure({ heading: { levels: [3] }, link: false }),
       Link.configure({
         autolink: true,
         linkOnPaste: true,
@@ -255,6 +255,15 @@ export function MarkdownNoteEditor({ initialValue, onChange }: MarkdownNoteEdito
     setLinkFormOpen(true);
   }
 
+  function closeLinkForm() {
+    const activeEditor = editor;
+    if (!activeEditor) return;
+    setLinkFormOpen(false);
+    setLinkError(null);
+    setLinkUrl("");
+    window.requestAnimationFrame(() => activeEditor.commands.focus());
+  }
+
   function applyLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const activeEditor = editor;
@@ -267,9 +276,7 @@ export function MarkdownNoteEditor({ initialValue, onChange }: MarkdownNoteEdito
     }
 
     activeEditor.chain().focus().extendMarkRange("link").setLink({ href }).run();
-    setLinkFormOpen(false);
-    setLinkError(null);
-    setLinkUrl("");
+    closeLinkForm();
   }
 
   return (
@@ -303,7 +310,7 @@ export function MarkdownNoteEditor({ initialValue, onChange }: MarkdownNoteEdito
       ) : null}
 
       {linkFormOpen ? (
-        <form className="markdown-editor-link-form" onSubmit={applyLink}>
+        <form className="markdown-editor-link-form" onSubmit={applyLink} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeLinkForm(); } }}>
           <label htmlFor={formatMenuId + "-link"}>Link URL</label>
           <input
             ref={linkInputRef}
@@ -317,7 +324,7 @@ export function MarkdownNoteEditor({ initialValue, onChange }: MarkdownNoteEdito
             placeholder="https://example.com"
           />
           <div className="markdown-editor-link-actions">
-            <button type="button" onClick={() => { setLinkFormOpen(false); setLinkError(null); }}>Cancel</button>
+            <button type="button" onClick={closeLinkForm}>Cancel</button>
             <button type="submit">Apply link</button>
           </div>
           {linkError ? <p id={linkErrorId} role="alert">{linkError}</p> : null}

@@ -1,4 +1,15 @@
-import { open, readFile, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { open, readFile, stat, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+export function controlledCallLeasePath(input: { connectionId: string; from: string; to: string }) {
+  const key = createHash("sha256")
+    .update(`${input.connectionId}\u0000${input.from}\u0000${input.to}`)
+    .digest("hex")
+    .slice(0, 24);
+  return join(tmpdir(), `dentist-voice-experiment-${key}.json`);
+}
 
 type LeaseRecord = {
   active: boolean;
@@ -6,6 +17,14 @@ type LeaseRecord = {
   cooldownUntil: number;
   ownerId: string;
 };
+
+type OperationLockRecord = {
+  expiresAt: number;
+  ownerId: string;
+  pid: number;
+};
+
+const operationLockLifetimeMs = 30_000;
 
 export type ControlledCallLease = {
   acquire(ownerId: string): Promise<void>;
@@ -39,6 +58,37 @@ function parseLeaseRecord(contents: string): LeaseRecord {
   };
 }
 
+function parseOperationLockRecord(contents: string): OperationLockRecord | undefined {
+  try {
+    const record = JSON.parse(contents) as Partial<OperationLockRecord>;
+    if (
+      typeof record.ownerId !== "string"
+      || !Number.isInteger(record.pid)
+      || record.pid! <= 0
+      || !Number.isFinite(record.expiresAt)
+    ) return undefined;
+    return {
+      expiresAt: record.expiresAt!,
+      ownerId: record.ownerId,
+      pid: record.pid!,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function isProcessAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "EPERM";
+  }
+}
+
 export class FileControlledCallLease implements ControlledCallLease {
   private operations = Promise.resolve();
 
@@ -46,20 +96,20 @@ export class FileControlledCallLease implements ControlledCallLease {
     private readonly path: string,
     private readonly now: () => number = Date.now,
     private readonly activeLifetimeMs = 5 * 60 * 1000,
-    private readonly cooldownMs = 10 * 60 * 1000,
+    private readonly cooldownMs = 4 * 60 * 1000,
   ) {}
 
   acquire(ownerId: string) {
-    return this.serialize(async () => {
+    return this.serialize(() => this.withOperationLock(async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const current = await this.read();
         if (current?.active && current.activeUntil > this.now()) {
           throw new Error("A previous controlled call may still be active. Wait five minutes before trying again.");
         }
         if (current && current.cooldownUntil > this.now()) {
-          throw new Error("Wait ten minutes before starting another controlled call.");
+          throw new Error("Wait four minutes before starting another controlled call.");
         }
-        if (current) await rm(this.path, { force: true });
+        if (current) await unlink(this.path);
 
         try {
           const file = await open(this.path, "wx");
@@ -80,11 +130,11 @@ export class FileControlledCallLease implements ControlledCallLease {
       }
 
       throw new Error("A previous controlled call may still be active. Wait five minutes before trying again.");
-    });
+    }));
   }
 
   replaceOwner(currentOwnerId: string, nextOwnerId: string) {
-    return this.serialize(async () => {
+    return this.serialize(() => this.withOperationLock(async () => {
       const current = await this.read();
       if (!current || current.ownerId !== currentOwnerId) {
         throw new Error("The controlled call safety lock changed before the call could start.");
@@ -96,11 +146,11 @@ export class FileControlledCallLease implements ControlledCallLease {
       } finally {
         await file.close();
       }
-    });
+    }));
   }
 
   release(ownerId: string) {
-    return this.serialize(async () => {
+    return this.serialize(() => this.withOperationLock(async () => {
       const current = await this.read();
       if (!current || current.ownerId !== ownerId) return;
       const file = await open(this.path, "w");
@@ -109,15 +159,15 @@ export class FileControlledCallLease implements ControlledCallLease {
       } finally {
         await file.close();
       }
-    });
+    }));
   }
 
   cancel(ownerId: string) {
-    return this.serialize(async () => {
+    return this.serialize(() => this.withOperationLock(async () => {
       const current = await this.read();
       if (!current || current.ownerId !== ownerId) return;
-      await rm(this.path, { force: true });
-    });
+      await unlink(this.path);
+    }));
   }
 
   private async read() {
@@ -141,6 +191,79 @@ export class FileControlledCallLease implements ControlledCallLease {
     this.operations = next.then(() => undefined, () => undefined);
     return next;
   }
+
+  private async withOperationLock<T>(operation: () => Promise<T>) {
+    const lockPath = `${this.path}.operation-lock`;
+    let lock: Awaited<ReturnType<typeof open>> | undefined;
+    let ownerId: string | undefined;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        lock = await open(lockPath, "wx", 0o600);
+        ownerId = randomUUID();
+        await lock.writeFile(JSON.stringify({
+          expiresAt: this.now() + operationLockLifetimeMs,
+          ownerId,
+          pid: process.pid,
+        } satisfies OperationLockRecord));
+        break;
+      } catch (error) {
+        if (lock) {
+          await lock.close().catch(() => undefined);
+          lock = undefined;
+          await unlink(lockPath).catch(() => undefined);
+          throw error;
+        }
+        if (!this.isAlreadyLocked(error)) throw error;
+        if (await this.recoverStaleOperationLock(lockPath)) continue;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+    if (!lock) {
+      throw new Error("The controlled call safety lock is busy. Try again.");
+    }
+
+    try {
+      return await operation();
+    } finally {
+      await lock.close();
+      await this.removeOwnedOperationLock(lockPath, ownerId!);
+    }
+  }
+
+  private async recoverStaleOperationLock(lockPath: string) {
+    let observed: string;
+    try {
+      observed = await readFile(lockPath, "utf8");
+    } catch (error) {
+      if (isMissingFile(error)) return true;
+      throw error;
+    }
+    const record = parseOperationLockRecord(observed);
+    if (!record) {
+      const fileStats = await stat(lockPath);
+      if (Date.now() - fileStats.mtimeMs <= operationLockLifetimeMs) return false;
+    } else if (record.expiresAt > this.now() && isProcessAlive(record.pid)) {
+      return false;
+    }
+
+    try {
+      if (await readFile(lockPath, "utf8") !== observed) return false;
+      await unlink(lockPath);
+      return true;
+    } catch (error) {
+      if (isMissingFile(error)) return true;
+      throw error;
+    }
+  }
+
+  private async removeOwnedOperationLock(lockPath: string, ownerId: string) {
+    try {
+      const current = parseOperationLockRecord(await readFile(lockPath, "utf8"));
+      if (current?.ownerId === ownerId) await unlink(lockPath);
+    } catch (error) {
+      if (!isMissingFile(error)) throw error;
+    }
+  }
 }
 
 export class MemoryControlledCallLease implements ControlledCallLease {
@@ -149,7 +272,7 @@ export class MemoryControlledCallLease implements ControlledCallLease {
   constructor(
     private readonly now: () => number = Date.now,
     private readonly activeLifetimeMs = 5 * 60 * 1000,
-    private readonly cooldownMs = 10 * 60 * 1000,
+    private readonly cooldownMs = 4 * 60 * 1000,
   ) {}
 
   async acquire(ownerId: string) {
@@ -157,7 +280,7 @@ export class MemoryControlledCallLease implements ControlledCallLease {
       throw new Error("A previous controlled call may still be active. Wait five minutes before trying again.");
     }
     if (this.record && this.record.cooldownUntil > this.now()) {
-      throw new Error("Wait ten minutes before starting another controlled call.");
+      throw new Error("Wait four minutes before starting another controlled call.");
     }
     this.record = {
       active: true,

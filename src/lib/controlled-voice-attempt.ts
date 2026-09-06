@@ -52,6 +52,8 @@ export type ControlledVoiceAttemptEvent = {
 };
 
 export type ControlledVoiceAttempt = {
+  callback?: { date: string; time: string; timeEnd?: string; timeZone: string; status: "requested" | "dispatched" };
+  cooldownUntil?: string;
   createdAt: string;
   events: ControlledVoiceAttemptEvent[];
   id: string;

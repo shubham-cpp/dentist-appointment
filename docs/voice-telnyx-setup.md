@@ -47,46 +47,31 @@ Copy the Telnyx names from [voice-demo.env.example](voice-demo.env.example) into
 
 ## Managed assistant model
 
-The managed scheduling assistant uses `openai/gpt-5.6-luna`.
-
-Telnyx requires an integration-secret identifier for third-party models.
-Use a paid OpenAI API key. Put it in `TELNYX_OPENAI_API_KEY` in `.env.local`.
-Do not put the key in `.voice-preflight.env`.
+The managed scheduling assistant uses `openai/gpt-5.6-sol`. The September 5 regression comparison selected it for callback confirmation and terminal-state handling.
 
 The approved provisioning command performs these actions:
 
-1. Verify that Telnyx lists `openai/gpt-5.6-luna`.
-2. Create or reuse the named OpenAI integration secret.
-3. Create or reuse the scheduling tools.
-4. Compare the full approved assistant settings with the main version.
-5. Promote a version only when the approved settings differ.
-6. Verify the resolved tool names when Telnyx omits `tool_ids`.
-7. Record the previous version for rollback.
+1. Build the five-tool assistant draft.
+2. Show the proposed model, voice, privacy, and recording settings without `--apply`.
+3. Create the assistant, or compare and update the configured assistant with `--apply`.
+4. Promote a version only when the approved settings differ.
+5. Write the assistant ID and pinned version to the local environment files.
 
 ```bash
-pnpm voice:assistant:provision -- --confirm
-pnpm test:telnyx:assistant-chat -- --verify
-pnpm test:telnyx:assistant-call -- --verify
+pnpm voice:telnyx-candidate:provision
+pnpm voice:telnyx-candidate:provision -- --apply
+pnpm voice:preflight
 ```
 
-The two verification commands are read-only. They do not place a call.
-The provisioning command does not place a call.
+The first command and preflight are read-only. None of these commands places a call.
 
 The approved voice profile uses Deepgram Flux.
-It sets `eager_eot_threshold` to `0.3`.
-It sets the speaking wait and endpoint values to `0.1` seconds.
+It sets `eager_eot_threshold` to `0.4` and `eot_threshold` to `0.7`.
+It sets the end-of-turn timeout to 600 milliseconds.
 It also enables message-history callbacks for the local diagnostic report.
 
-Keep `pnpm dev` running before the confirmed isolated call.
-
-```bash
-pnpm test:telnyx:assistant-call -- --confirm
-```
-
-The command writes one report to `.voice-logs/telnyx-assistant-call-<run-id>.json`.
-The report contains the transcript, call events, and timing proxies.
-It does not contain phone numbers or call identifiers.
-History timestamps do not measure audio arrival at the phone.
+Keep `pnpm dev` running. Start the controlled call from the local dashboard.
+The gateway writes redacted local evidence with restricted file permissions.
 
 Official references:
 
@@ -94,7 +79,7 @@ Official references:
 - [Update an assistant](https://developers.telnyx.com/api-reference/assistants/update-an-assistant)
 - [Create an integration secret](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret)
 - [OpenAI integration](https://developers.telnyx.com/docs/inference/ai-assistants/no-code-voice-assistant)
-- [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+- [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol)
 
 ## How the outbound call is created
 

@@ -2,6 +2,10 @@ import { z } from "zod";
 import { isLoopbackHttpUrl } from "@/lib/loopback-url";
 import { loadVoiceGatewayInternalSettings } from "@/lib/voice-gateway-internal";
 import { loadVoiceGatewayPublicBaseUrl } from "@/lib/voice-gateway-public";
+import {
+  loadControlledCallSafetyPolicy,
+  type ControlledCallSafetyPolicy,
+} from "@/voice-core/call-safety-policy";
 
 const e164PhoneNumber = /^\+[1-9]\d{7,14}$/;
 
@@ -19,12 +23,6 @@ const environmentSchema = z.object({
   TWILIO_PHONE_NUMBER: z
     .string()
     .regex(e164PhoneNumber, "TWILIO_PHONE_NUMBER must use E.164 format."),
-  VOICE_CALLS_ENABLED: z.literal("true", {
-    error: "VOICE_CALLS_ENABLED must be true before a voice call can start.",
-  }),
-  VOICE_DEMO_MODE: z.literal("true", {
-    error: "VOICE_DEMO_MODE must be true for the controlled voice demo.",
-  }),
   VOICE_GATEWAY_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   VOICE_LANGUAGE: z.literal("en-IN"),
   VOICE_SPEECH_MODEL: z.literal("long"),
@@ -51,7 +49,7 @@ const environmentSchema = z.object({
     .default(5_000),
 });
 
-export type VoiceGatewayConfig = {
+export type VoiceGatewayConfig = ControlledCallSafetyPolicy & {
   aiApiKey: string;
   aiBaseUrl: string;
   aiModel: string;
@@ -97,6 +95,7 @@ export function loadVoiceGatewayConfig(
 
   const internalSettings = loadVoiceGatewayInternalSettings(environment);
   const publicBaseUrl = loadVoiceGatewayPublicBaseUrl(environment);
+  const safetyPolicy = loadControlledCallSafetyPolicy(environment);
 
   return {
     aiApiKey: parsed.data.VOICE_AI_API_KEY,
@@ -104,8 +103,7 @@ export function loadVoiceGatewayConfig(
     aiModel: parsed.data.VOICE_AI_MODEL,
     aiTimeoutMs: parsed.data.VOICE_AI_TIMEOUT_MS,
     callToNumber: parsed.data.CALL_TO_NUMBER,
-    callsEnabled: true,
-    demoMode: true,
+    ...safetyPolicy,
     gatewayPort: parsed.data.VOICE_GATEWAY_PORT,
     internalSecret: internalSettings.internalSecret,
     internalUrl: internalSettings.internalUrl,

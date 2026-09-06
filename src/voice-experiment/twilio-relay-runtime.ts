@@ -1,4 +1,4 @@
-import type { VoiceEvidenceEvent } from "./evidence-recorder";
+import type { VoiceEvidenceEvent } from "@/voice-core/evidence-recorder";
 import type { TwilioDialogueSession } from "./twilio-dialogue-session";
 
 export type TwilioRelaySetup = {
@@ -84,9 +84,8 @@ export function createTwilioRelayRuntime(options: {
           message,
         );
         if (message.last) {
-          await session.respond(message.voicePrompt);
-        } else {
-          session.revisePartial(message.voicePrompt);
+          const result = await session.respond(message.voicePrompt);
+          await record("model", `model.output.${result.status}`, result);
         }
         return;
       }

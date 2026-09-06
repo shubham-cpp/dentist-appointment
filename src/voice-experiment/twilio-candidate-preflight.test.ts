@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   checkTwilioVoiceVerification,
+  createTwilioCandidatePreflight,
   runTwilioCandidatePreflight,
   TwilioCandidatePreflightError,
 } from "./twilio-candidate-preflight";
@@ -84,4 +85,60 @@ test("accepts only a recent verification for the locked Jessica voice", async ()
     now: new Date("2026-08-30T10:00:00.000Z"),
     path,
   }), false);
+});
+
+test("deduplicates concurrent preflight checks and caches success for 30 seconds", async () => {
+  let nowMs = 1_000;
+  let accountChecks = 0;
+  const preflight = createTwilioCandidatePreflight({
+    async checkAccount() {
+      accountChecks += 1;
+      return { active: true, recordingAvailable: true, sourceNumberOwned: true };
+    },
+    async checkCallback() {
+      return true;
+    },
+    async checkModel() {
+      return true;
+    },
+    async checkVoice() {
+      return true;
+    },
+  }, () => nowMs);
+
+  await Promise.all([preflight(), preflight()]);
+  await preflight();
+  assert.equal(accountChecks, 1);
+
+  nowMs += 30_000;
+  await preflight();
+  assert.equal(accountChecks, 2);
+});
+
+test("caches a failed preflight for no more than one second", async () => {
+  let nowMs = 1_000;
+  let accountChecks = 0;
+  const preflight = createTwilioCandidatePreflight({
+    async checkAccount() {
+      accountChecks += 1;
+      return { active: false, recordingAvailable: true, sourceNumberOwned: true };
+    },
+    async checkCallback() {
+      return true;
+    },
+    async checkModel() {
+      return true;
+    },
+    async checkVoice() {
+      return true;
+    },
+  }, () => nowMs);
+
+  await assert.rejects(preflight(), TwilioCandidatePreflightError);
+  await assert.rejects(preflight(), TwilioCandidatePreflightError);
+  assert.equal(accountChecks, 1);
+
+  nowMs += 1_000;
+  await assert.rejects(preflight(), TwilioCandidatePreflightError);
+  assert.equal(accountChecks, 2);
 });

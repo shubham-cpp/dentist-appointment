@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { twilioCandidateDefaults } from "./twilio-candidate";
+
 export type TwilioCandidatePreflightCheckName =
   | "account-active"
   | "callback-reachable"
@@ -24,6 +27,17 @@ export type TwilioCandidatePreflightResult = {
   passed: boolean;
 };
 
+type TwilioCandidatePreflightDependencies = {
+  checkAccount(): Promise<{
+    active: boolean;
+    recordingAvailable: boolean;
+    sourceNumberOwned: boolean;
+  }>;
+  checkCallback(): Promise<boolean>;
+  checkModel(): Promise<boolean>;
+  checkVoice(): Promise<boolean>;
+};
+
 export async function checkTwilioVoiceVerification(input: {
   now?: Date;
   path: string;
@@ -44,16 +58,9 @@ export async function checkTwilioVoiceVerification(input: {
   }
 }
 
-export async function runTwilioCandidatePreflight(checker: {
-  checkAccount(): Promise<{
-    active: boolean;
-    recordingAvailable: boolean;
-    sourceNumberOwned: boolean;
-  }>;
-  checkCallback(): Promise<boolean>;
-  checkModel(): Promise<boolean>;
-  checkVoice(): Promise<boolean>;
-}): Promise<TwilioCandidatePreflightResult> {
+export async function runTwilioCandidatePreflight(
+  checker: TwilioCandidatePreflightDependencies,
+): Promise<TwilioCandidatePreflightResult> {
   const [account, callbackReachable, modelReady, voiceAvailable] = await Promise.all([
     checker.checkAccount(),
     checker.checkCallback(),
@@ -77,5 +84,44 @@ export async function runTwilioCandidatePreflight(checker: {
     passed: failedChecks.length === 0,
   };
 }
-import { readFile } from "node:fs/promises";
-import { twilioCandidateDefaults } from "./twilio-candidate";
+
+export function createTwilioCandidatePreflight(
+  checker: TwilioCandidatePreflightDependencies,
+  now: () => number = Date.now,
+) {
+  let inFlight: Promise<TwilioCandidatePreflightResult> | undefined;
+  let cachedSuccess: { expiresAt: number; result: TwilioCandidatePreflightResult } | undefined;
+  let cachedFailure: { error: unknown; expiresAt: number } | undefined;
+
+  return function preflight() {
+    const currentTime = now();
+    if (cachedSuccess && currentTime < cachedSuccess.expiresAt) {
+      return Promise.resolve(cachedSuccess.result);
+    }
+    if (cachedFailure && currentTime < cachedFailure.expiresAt) {
+      return Promise.reject(cachedFailure.error);
+    }
+    if (inFlight) return inFlight;
+
+    const execution = runTwilioCandidatePreflight(checker).then((result) => {
+      result.assertReady();
+      return result;
+    });
+    const shared = execution.then(
+      (result) => {
+        cachedSuccess = { expiresAt: now() + 30_000, result };
+        cachedFailure = undefined;
+        return result;
+      },
+      (error: unknown) => {
+        cachedFailure = { error, expiresAt: now() + 1_000 };
+        cachedSuccess = undefined;
+        throw error;
+      },
+    ).finally(() => {
+      if (inFlight === shared) inFlight = undefined;
+    });
+    inFlight = shared;
+    return shared;
+  };
+}

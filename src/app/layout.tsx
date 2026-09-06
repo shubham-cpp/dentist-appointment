@@ -3,6 +3,7 @@ import { Atkinson_Hyperlegible_Next } from "next/font/google";
 import "./globals.css";
 
 const atkinson = Atkinson_Hyperlegible_Next({
+  adjustFontFallback: false,
   subsets: ["latin"],
   display: "swap",
   variable: "--font-atkinson",

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { VoiceAttemptStore } from "./attempt-store";
-import { MemoryControlledCallLease, type ControlledCallLease } from "./controlled-call-lease";
+import { VoiceAttemptStore } from "@/voice-core/attempt-store";
+import { MemoryControlledCallLease, type ControlledCallLease } from "@/voice-core/controlled-call-lease";
 import type { VoiceIntent } from "./conversation";
 import { loadVoiceGatewayConfig } from "./config";
 import type { VoiceIntentClassifier } from "./intent-classifier";
-import { createVoiceGateway } from "./server";
+import { createVoiceGatewayRuntime } from "./server";
 
 const callSid = `CA${"1".repeat(32)}`;
 const relaySessionId = `VX${"2".repeat(32)}`;
@@ -59,6 +59,8 @@ function createTestGateway(options: {
   classifier?: VoiceIntentClassifier;
   controlledCallLease?: ControlledCallLease;
   createFails?: boolean;
+  createNeverSettles?: boolean;
+  dialTimeoutMs?: number;
   partialPromptFinalizationMs?: number;
   shutdownStopTimeoutMs?: number;
   terminalPlaybackTimeoutMs?: number;
@@ -81,6 +83,7 @@ function createTestGateway(options: {
         create: async (request: unknown) => {
           requests.push(request);
           if (options.createFails) throw new Error("Twilio create result is uncertain");
+          if (options.createNeverSettles) await new Promise<void>(() => {});
           return { sid: callSid };
         },
       },
@@ -88,12 +91,13 @@ function createTestGateway(options: {
   };
   const config = loadVoiceGatewayConfig(validEnvironment);
   const attempts = new VoiceAttemptStore(() => 1_000, 0);
-  const app = createVoiceGateway(config, {
+  const { app, close } = createVoiceGatewayRuntime(config, {
     attempts,
     createTwilioClient: () => client as never,
     callerReplyTimeoutMs: options.callerReplyTimeoutMs,
     callerReplyRetryTimeoutMs: options.callerReplyRetryTimeoutMs,
     controlledCallLease: options.controlledCallLease ?? new MemoryControlledCallLease(),
+    dialTimeoutMs: options.dialTimeoutMs,
     intentClassifier: options.classifier ?? createScriptedClassifier(),
     partialPromptFinalizationMs: options.partialPromptFinalizationMs,
     shutdownStopTimeoutMs: options.shutdownStopTimeoutMs,
@@ -101,7 +105,7 @@ function createTestGateway(options: {
     validateRequest: options.validateRequest ?? (() => true),
   });
 
-  return { app, attempts, requests, updates };
+  return { app, attempts, close, config, requests, updates };
 }
 
 test("validates Relay WebSocket signatures against the WSS endpoint", async (t) => {
@@ -199,6 +203,26 @@ test("fails preflight safely when the local intent classifier is unavailable", a
 
   assert.equal(response.statusCode, 503);
   assert.equal(requests.length, 0);
+});
+
+test("checks the call safety policy again before the baseline Dial", async (t) => {
+  const { app, attempts, config, requests } = createTestGateway();
+  t.after(() => app.close());
+  (config as unknown as { callsEnabled: boolean }).callsEnabled = false;
+
+  const response = await app.inject({
+    headers: {
+      "x-voice-gateway-secret": validEnvironment.VOICE_GATEWAY_INTERNAL_SECRET,
+      "x-voice-request-id": requestId,
+    },
+    method: "POST",
+    url: "/internal/controlled-attempt",
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(response.json(), { error: "voice_calls_disabled" });
+  assert.equal(requests.length, 0);
+  assert.equal(attempts.getViewByRequestId(requestId)?.transportStatus, "failed");
 });
 
 test("completes one fixed-destination ConversationRelay canary", async (t) => {
@@ -385,7 +409,7 @@ test("returns the redacted active call after a dashboard refresh", async (t) => 
   const { app, attempts } = createTestGateway();
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
 
   const response = await app.inject({
     headers: { "x-voice-gateway-secret": validEnvironment.VOICE_GATEWAY_INTERNAL_SECRET },
@@ -401,7 +425,7 @@ test("returns no active call after the controlled call ends", async (t) => {
   const { app, attempts } = createTestGateway();
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   attempts.updateStatus(attempt.id, callSid, "completed");
 
   const response = await app.inject({
@@ -449,7 +473,7 @@ test("waits for Twilio playback confirmation before ending a terminal reply", as
   });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -493,7 +517,7 @@ test("records an unknown outcome when final playback is not confirmed", async (t
   });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -524,7 +548,7 @@ test("uses Twilio's fallback when the caller interrupts a terminal reply", async
   });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -586,7 +610,7 @@ test("ends a Relay session safely after an error and asks Twilio for a fallback 
   const { app, attempts } = createTestGateway();
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -641,7 +665,7 @@ test("retries once and ends safely when no final caller prompt arrives", async (
   });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -687,7 +711,7 @@ test("recovers a clear affirmative partial prompt when no final prompt arrives",
   });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -722,7 +746,7 @@ test("marks an unexpected Relay disconnection as unknown", async (t) => {
   const { app, attempts } = createTestGateway();
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -751,7 +775,7 @@ test("lets a failed Relay callback replace an unknown disconnect outcome", async
   const { app, attempts } = createTestGateway();
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   await app.ready();
 
   const socket = await app.injectWS("/twilio/relay", {
@@ -829,7 +853,7 @@ test("does not speak or record an AI result after staff stops the call", async (
   const { app, attempts } = createTestGateway({ classifier });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
 
   await app.ready();
   const socket = await app.injectWS("/twilio/relay", {
@@ -859,6 +883,20 @@ test("does not speak or record an AI result after staff stops the call", async (
 
   assert.equal(stopResponse.statusCode, 200);
   assert.deepEqual(outboundMessages, []);
+  assert.equal(attempts.getView(attempt.id)?.transportStatus, "cancel_requested");
+  assert.equal(attempts.getView(attempt.id)?.outcome, "none");
+
+  const terminal = await app.inject({
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "validated-by-test",
+    },
+    method: "POST",
+    payload: `CallSid=${callSid}&CallStatus=completed&SequenceNumber=1`,
+    url: `/twilio/status?attempt=${attempt.id}`,
+  });
+  assert.equal(terminal.statusCode, 204);
+  assert.equal(attempts.getView(attempt.id)?.transportStatus, "canceled");
   assert.equal(attempts.getView(attempt.id)?.outcome, "failed");
   socket.terminate();
 });
@@ -878,7 +916,7 @@ test("does not send a delayed AI reply after the Relay WebSocket closes", async 
   const { app, attempts } = createTestGateway({ classifier });
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
 
   await app.ready();
   const socket = await app.injectWS("/twilio/relay", {
@@ -918,7 +956,7 @@ test("ends a connected Relay session safely after a non-terminal Relay error", a
   t.after(() => app.close());
 
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
 
   await app.ready();
   const socket = await app.injectWS("/twilio/relay", {
@@ -959,7 +997,7 @@ test("ignores an unrecognized Relay event after setup", async (t) => {
   t.after(() => app.close());
 
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
 
   await app.ready();
   const socket = await app.injectWS("/twilio/relay", {
@@ -993,7 +1031,7 @@ test("rejects Relay completion for a different session", async (t) => {
   t.after(() => app.close());
 
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   attempts.bindRelaySession(attempt.relayToken, callSid, relaySessionId);
 
   const response = await app.inject({
@@ -1015,7 +1053,7 @@ test("accepts Twilio's ended Relay completion callback", async (t) => {
   t.after(() => app.close());
 
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   attempts.bindRelaySession(attempt.relayToken, callSid, relaySessionId);
 
   const response = await app.inject({
@@ -1038,7 +1076,7 @@ test("rejects a Relay completion without Twilio's session status", async (t) => 
   t.after(() => app.close());
 
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
   attempts.bindRelaySession(attempt.relayToken, callSid, relaySessionId);
 
   const response = await app.inject({
@@ -1074,7 +1112,106 @@ test("tracks uncertain creation and does not create the same request twice", asy
   assert.equal(attempts.getViewByRequestId(requestId)?.id, attemptId);
 });
 
-test("keeps stop retryable when Twilio does not confirm the hangup", async (t) => {
+test("bounds an uncertain Twilio Dial without retrying it", async (t) => {
+  const { app, attempts, requests } = createTestGateway({
+    createNeverSettles: true,
+    dialTimeoutMs: 1,
+  });
+  t.after(() => app.close().catch(() => {}));
+
+  const response = await Promise.race([
+    app.inject({
+      headers: {
+        "x-voice-gateway-secret": validEnvironment.VOICE_GATEWAY_INTERNAL_SECRET,
+        "x-voice-request-id": requestId,
+      },
+      method: "POST",
+      url: "/internal/controlled-attempt",
+    }),
+    new Promise<"timed_out">((resolve) => setTimeout(() => resolve("timed_out"), 100)),
+  ]);
+
+  assert.notEqual(response, "timed_out");
+  if (response === "timed_out") return;
+  assert.equal(response.statusCode, 202);
+  const attemptId = (response.json() as { attempt: { id: string } }).attempt.id;
+  assert.equal(attempts.getView(attemptId)?.transportStatus, "creation_uncertain");
+  assert.equal(requests.length, 1);
+});
+
+test("hangs up a late Twilio call after staff stops an uncertain Dial", async (t) => {
+  const lease = new MemoryControlledCallLease(() => Date.now(), 60_000);
+  const { app, attempts, updates } = createTestGateway({
+    controlledCallLease: lease,
+    createNeverSettles: true,
+    dialTimeoutMs: 1,
+  });
+  t.after(() => app.close().catch(() => {}));
+
+  const start = await app.inject({
+    headers: {
+      "x-voice-gateway-secret": validEnvironment.VOICE_GATEWAY_INTERNAL_SECRET,
+      "x-voice-request-id": requestId,
+    },
+    method: "POST",
+    url: "/internal/controlled-attempt",
+  });
+  const attemptId = (start.json() as { attempt: { id: string } }).attempt.id;
+  assert.equal(start.statusCode, 202);
+  assert.equal(attempts.getView(attemptId)?.transportStatus, "creation_uncertain");
+
+  const stop = await app.inject({
+    headers: { "x-voice-gateway-secret": validEnvironment.VOICE_GATEWAY_INTERNAL_SECRET },
+    method: "POST",
+    url: `/internal/controlled-attempt/${attemptId}/stop`,
+  });
+  assert.equal(stop.statusCode, 200);
+  assert.equal(attempts.getView(attemptId)?.transportStatus, "cancel_requested");
+  assert.deepEqual(updates, []);
+
+  const twiml = await app.inject({
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "validated-by-test",
+    },
+    method: "POST",
+    payload: `CallSid=${callSid}`,
+    url: `/twilio/voice?attempt=${attemptId}`,
+  });
+  assert.equal(twiml.statusCode, 200);
+  assert.match(twiml.body, /<Hangup\s*\/>/);
+  assert.doesNotMatch(twiml.body, /<ConversationRelay/);
+  assert.deepEqual(updates, [callSid]);
+
+  const duplicateTwiml = await app.inject({
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "validated-by-test",
+    },
+    method: "POST",
+    payload: `CallSid=${callSid}`,
+    url: `/twilio/voice?attempt=${attemptId}`,
+  });
+  assert.equal(duplicateTwiml.statusCode, 200);
+  assert.match(duplicateTwiml.body, /<Hangup\s*\/>/);
+  assert.deepEqual(updates, [callSid]);
+  await assert.rejects(lease.acquire("next-before-terminal"), /may still be active/);
+
+  const terminal = await app.inject({
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "validated-by-test",
+    },
+    method: "POST",
+    payload: `CallSid=${callSid}&CallStatus=completed&SequenceNumber=1`,
+    url: `/twilio/status?attempt=${attemptId}`,
+  });
+  assert.equal(terminal.statusCode, 204);
+  assert.equal(attempts.getView(attemptId)?.transportStatus, "canceled");
+  await assert.rejects(lease.acquire("next-after-terminal"), /Wait four minutes/);
+});
+
+test("keeps the safety lease when Twilio does not accept the hangup", async (t) => {
   const { app, attempts } = createTestGateway({ updateFails: true });
   t.after(() => app.close().catch(() => {}));
   const startResponse = await app.inject({
@@ -1094,11 +1231,11 @@ test("keeps stop retryable when Twilio does not confirm the hangup", async (t) =
   });
 
   assert.equal(stopResponse.statusCode, 502);
-  assert.equal(attempts.getView(attemptId)?.transportStatus, "cancel_requested");
+  assert.equal(attempts.getView(attemptId)?.transportStatus, "unknown");
 });
 
 test("ends a known active call when the gateway shuts down", async () => {
-  const { app, updates } = createTestGateway();
+  const { app, close, updates } = createTestGateway();
   const startResponse = await app.inject({
     headers: {
       "x-voice-gateway-secret": validEnvironment.VOICE_GATEWAY_INTERNAL_SECRET,
@@ -1109,12 +1246,24 @@ test("ends a known active call when the gateway shuts down", async () => {
   });
 
   assert.equal(startResponse.statusCode, 201);
-  await app.close();
+  const closing = close();
+  await waitFor(() => updates.length === 1, "Shutdown did not request call termination.");
+  const terminal = await app.inject({
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "validated-by-test",
+    },
+    method: "POST",
+    payload: `CallSid=${callSid}&CallStatus=completed&SequenceNumber=1`,
+    url: `/twilio/status?attempt=${startResponse.json().attempt.id}`,
+  });
+  assert.equal(terminal.statusCode, 204);
+  await closing;
   assert.deepEqual(updates, [callSid]);
 });
 
 test("fails shutdown within its deadline when Twilio never confirms the stop", async () => {
-  const { app } = createTestGateway({
+  const { app, close } = createTestGateway({
     shutdownStopTimeoutMs: 1,
     updateNeverSettles: true,
   });
@@ -1129,11 +1278,12 @@ test("fails shutdown within its deadline when Twilio never confirms the stop", a
   assert.equal(startResponse.statusCode, 201);
 
   const closeResult = await Promise.race([
-    app.close().then(() => "closed", () => "rejected"),
+    close().then(() => "closed", () => "rejected"),
     new Promise<"timed_out">((resolve) => setTimeout(() => resolve("timed_out"), 100)),
   ]);
 
   assert.equal(closeResult, "rejected");
+  await app.close();
 });
 
 test("rejects unsigned Twilio status callbacks", async (t) => {
@@ -1154,7 +1304,7 @@ test("accepts Twilio's canceled terminal status", async (t) => {
   const { app, attempts } = createTestGateway();
   t.after(() => app.close());
   const attempt = attempts.createAttempt(requestId);
-  attempts.bindCallSid(attempt.id, callSid);
+  attempts.bindProviderCallId(attempt.id, callSid);
 
   const response = await app.inject({
     headers: {

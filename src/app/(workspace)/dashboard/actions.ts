@@ -15,7 +15,7 @@ import {
   type ControlledVoiceAttempt,
 } from "@/lib/controlled-voice-attempt";
 import { z } from "zod";
-import { isLoopbackHttpUrl } from "@/lib/loopback-url";
+import { isLocalDashboardRequestHeaders } from "@/lib/local-dashboard-request";
 import { voiceCallContextSchema, voiceCallResultSchema } from "@/lib/voice-call-context";
 import {
   createVoiceGatewayInternalRequestInit,
@@ -27,11 +27,21 @@ export async function updateDemoReschedulingCaseAction(
   action: DemoReschedulingAction,
   selectedSlotId?: string,
 ) {
+  if (!await isLocalDashboardRequest()) return getDemoReschedulingCase();
+  if (action === "reset-demo" && process.env.VOICE_RUNTIME === "telnyx-relay") {
+    const settings = voiceGatewaySettings();
+    if (!settings) return { ok: false as const, message: "The voice gateway is unavailable.", reschedulingCase: getDemoReschedulingCase() };
+    const reset = await fetch(new URL("/internal/controlled-attempt/reset", settings.internalUrl),
+      createVoiceGatewayInternalRequestInit(settings.internalSecret, "POST"));
+    if (!reset.ok) return { ok: false as const, message: "End the active call before resetting the demo.", reschedulingCase: getDemoReschedulingCase() };
+  }
   return updateDemoReschedulingCase(action, selectedSlotId);
 }
 
 const attemptIdSchema = z.string().startsWith("voice_");
 const voiceAttemptSchema = z.object({
+  callback: z.object({ date: z.string(), time: z.string(), timeEnd: z.string().optional(), timeZone: z.string(), status: z.enum(["requested", "dispatched"]) }).optional(),
+  cooldownUntil: z.string().optional(),
   createdAt: z.string(),
   events: z.array(z.object({
     id: z.string(),
@@ -134,15 +144,7 @@ async function requestVoiceGateway(
 }
 
 async function isLocalDashboardRequest() {
-  const origin = (await headers()).get("origin");
-  if (!origin) return false;
-
-  try {
-    const url = new URL(origin);
-    return isLoopbackHttpUrl(url);
-  } catch {
-    return false;
-  }
+  return isLocalDashboardRequestHeaders(await headers());
 }
 
 function localDashboardRequired(): ControlledVoiceAttemptActionResult {
@@ -153,16 +155,17 @@ function localDashboardRequired(): ControlledVoiceAttemptActionResult {
   };
 }
 
-export async function startControlledVoiceAttemptAction() {
+export async function startControlledVoiceAttemptAction(callbackAttemptId?: string) {
   if (!await isLocalDashboardRequest()) return localDashboardRequired();
 
+  if (callbackAttemptId && !attemptIdSchema.safeParse(callbackAttemptId).success) return localDashboardRequired();
   const requestId = randomUUID();
   const callContext = voiceCallContextSchema.parse(getDemoReschedulingCase().voiceContext);
   const result = await requestVoiceGateway(
     "/internal/controlled-attempt",
     "POST",
     { "x-voice-request-id": requestId },
-    { callContext },
+    { callContext, ...(callbackAttemptId ? { callbackAttemptId } : {}) },
   );
   if (result.ok || result.code !== "gateway_unavailable") return result;
 

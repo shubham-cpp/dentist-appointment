@@ -14,10 +14,10 @@ Set one value in `.env.local` and `.voice-preflight.env`.
 
 | Mode | `VOICE_RUNTIME` | Dialogue owner | Local Codex proxy |
 | --- | --- | --- | --- |
-| Baseline | `conversation-relay` | Local fixed dialogue runtime | Required |
-| Trial | `telnyx-ai-assistant` | Telnyx AI Assistant | Not used |
+| Baseline | `current-gateway` | Local fixed dialogue runtime | Required |
+| Trial | `telnyx-candidate` | Telnyx AI Assistant | Not used |
 
-One change back to `conversation-relay` restores the baseline runtime.
+One change back to `current-gateway` restores the baseline runtime.
 
 Do not remove the baseline runtime during the controlled trial.
 
@@ -27,39 +27,33 @@ Use your own test phone. Do not use a patient phone number.
 
 Both modes need these items:
 
-- A voice-capable Telnyx number.
-- The account public key for Ed25519 webhook checks.
 - A public HTTPS address for local port 3001.
 - One approved test destination.
 
-ConversationRelay also needs a TeXML application and local `claude-code-proxy` login.
+The baseline needs a voice-capable Twilio number, Account SID, Auth Token, and local Codex proxy login.
 
 The managed runtime needs these items:
 
+- A voice-capable Telnyx number.
+- The account public key for Ed25519 webhook checks.
 - A Telnyx Voice API connection ID.
 - The approved trial assistant ID.
-- The configured assistant tool integration secret.
-- A Telnyx OpenAI integration secret for `openai/gpt-5.6-luna`.
-- Eight shared scheduling webhook tools.
+- The pinned assistant version ID.
+- Five scheduling webhook tools and the native hangup tool.
 
 Phase 5 creates or updates managed Telnyx resources only after approval.
 
-The provisioning command reads `TELNYX_OPENAI_API_KEY` only when it must create
-the Telnyx secret. The gateway does not use this key at runtime.
+Provisioning requires the explicit `--apply` flag. It can create or promote a
+main assistant version. It never places a call.
 
-Provisioning requires the explicit `--confirm` flag. It can create a secret and
-promote a new main assistant version. It never places a call.
-
-Run the read-only checks after each assistant configuration change:
+Run the read-only preflight after each assistant configuration change:
 
 ```bash
-pnpm test:telnyx:assistant-chat -- --verify
-pnpm test:telnyx:assistant-call -- --verify
+pnpm voice:preflight
 ```
 
-Both commands reject a main assistant that is not on `openai/gpt-5.6-luna`.
-The call check also verifies Flux settings and the diagnostic receiver.
-Neither command places a call or runs inference.
+The preflight rejects model, voice, tool, callback, version, or privacy drift.
+It does not place a call or run inference.
 
 Account setup: [voice-telnyx-setup.md](voice-telnyx-setup.md).
 
@@ -103,6 +97,8 @@ Use `pnpm dev -- --skip-proxy` for focused Relay work without classification.
 
 Use `pnpm dev:dashboard` when you only need Next.js.
 
+The dashboard binds to `127.0.0.1`. Do not expose port 3000 through a tunnel or network listener.
+
 The preflight command loads `.env.local` and `.voice-preflight.env`. The
 development script overrides only the public gateway URL with the current
 ngrok tunnel URL.
@@ -117,22 +113,18 @@ ConversationRelay also checks the local classifier and public Relay WebSocket.
 
 Managed preflight skips both Relay checks. It does not place a phone call.
 
-## Run the isolated managed call
+## Run the managed call
 
-Keep `pnpm dev` running in one terminal.
-Run the billable isolated call in a second terminal.
+Keep `pnpm dev` running. Start the controlled call from the local dashboard.
 
-```bash
-pnpm test:telnyx:assistant-call -- --confirm
-```
+The Telnyx Dial request embeds the approved assistant and its dynamic variables.
 
-The call uses fictional Oliver data and no scheduling tools.
+The call uses fictional scheduling data and the five bounded tools.
 Speak normally and end the call within 60 seconds.
 
-The command writes a JSON report below `.voice-logs`.
-The report has the signed transcript and Telnyx event timestamps.
-It reports answer-to-greeting and user-to-assistant timing proxies.
-These values are not handset audio timestamps.
+The candidate writes finalized evidence below `.voice-artifacts`.
+
+Metrics-only retention is the default. It omits raw speech, audio, prompts, and model output.
 
 The ConversationRelay classifier uses the OpenAI Responses adapter.
 
@@ -183,26 +175,30 @@ Do not treat a transcript as proof of a write.
 
 ## Evidence and latency
 
-The debug log records redacted `voice.latency` events.
+Run the artifact report after the provider sends a signed terminal callback:
 
-| Stage | Runtime | Meaning |
-| --- | --- | --- |
-| `answer_to_texml` | ConversationRelay | Answer callback to TeXML response. |
-| `answer_to_relay_setup` | ConversationRelay | Relay setup indicator. It is not first audio. |
-| `intent_classification` | ConversationRelay | Local or model classification time. |
-| `final_transcript_to_response_sent` | ConversationRelay | Final transcript to response dispatch. |
-| `answer_to_assistant_start` | Managed | Answer event to confirmed assistant start command. |
-| Assistant tool duration | Managed | Tool request to local tool response. |
+```bash
+pnpm voice:latency:report
+```
 
-Use audio-based measurements for the first audible greeting and full turn latency.
+The report measures these candidate runtime stages:
 
-Server timestamps cannot prove when the caller heard speech.
+| Metric | Meaning |
+| --- | --- |
+| `greetingLatencyMs` | Destination answer to first assistant greeting audio. |
+| `turnLatencyMs` | Caller audio end to assistant audio start for one turn. |
+| `interruptionLatencyMs` | Caller audio start to assistant audio stop. |
+| `toolLatencyMs` | Tool start to tool completion. |
 
-Recording needs separate approval and a retention plan.
+These values use gateway monotonic timestamps.
 
-Recording stays disabled by default.
+They cannot prove when the caller heard speech.
 
-Do not claim stable p95 latency from a small trial.
+Percentiles use bounded samples. Do not claim stable p95 latency from a small trial.
+
+Recording needs separate approval and a retention plan. It stays disabled by default.
+
+See [voice-latency-diagnostics.md](voice-latency-diagnostics.md) for the storage contract.
 
 The dashboard applies a confirmed result once. A reschedule frees the old time. A cancellation removes the visit from the active calendar and keeps its audit record.
 
@@ -210,9 +206,11 @@ The dashboard shows redacted call progress. It does not show phone numbers, raw 
 
 ## Stop and recovery rules
 
-Use **End test call** to ask Telnyx to end an active call. If Telnyx does not confirm it, use the button again.
+Use **End test call** to send a Telnyx Call Control Hangup command.
 
-Managed mode stops the assistant first. It then sends a Call Control Hangup command.
+Wait for the signed terminal callback. The callback finalizes evidence and releases the safety lease.
+
+Do not assume that a successful stop request proves the call ended.
 
 Do not retry a `creation_uncertain` attempt. Check Telnyx Call Logs first.
 
@@ -227,10 +225,10 @@ The gateway ends a planned shutdown only after bounded Telnyx stop attempts. It 
 
 1. Stop the active test call.
 2. Confirm that no Telnyx call remains active.
-3. Set `VOICE_RUNTIME=conversation-relay` in both local environment files.
+3. Set `VOICE_RUNTIME=current-gateway` in both local environment files.
 4. Restart the gateway and dashboard.
 5. Run `pnpm voice:preflight`.
-6. Confirm that health reports `conversation-relay`.
+6. Confirm that health reports `current-gateway`.
 
 This rollback changes no assistant resource and no traffic route.
 

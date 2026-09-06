@@ -40,6 +40,11 @@ export function AppShell({ children }: AppShellProps) {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const navigationRef = useRef<HTMLElement>(null);
 
+  function closeMobileNavigation() {
+    setMobileOpen(false);
+    window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
+  }
+
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 760px)");
     const syncViewport = () => {
@@ -54,13 +59,36 @@ export function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     if (!isNarrowViewport || !mobileOpen) return;
-    navigationRef.current?.querySelector<HTMLAnchorElement>(".app-nav-link")?.focus();
-  }, [isNarrowViewport, mobileOpen]);
+    const navigation = navigationRef.current;
+    const focusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const getFocusableElements = () => Array.from(navigation?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])
+      .filter((element) => !element.hasAttribute("hidden") && element.getClientRects().length > 0);
+    window.requestAnimationFrame(() => getFocusableElements()[0]?.focus());
 
-  const closeMobileNavigation = () => {
-    setMobileOpen(false);
-    window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
-  };
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMobileNavigation();
+        return;
+      }
+      if (event.key !== "Tab" || !navigation) return;
+
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isNarrowViewport, mobileOpen]);
 
   const navigationHidden = isNarrowViewport && !mobileOpen;
 
@@ -76,7 +104,7 @@ export function AppShell({ children }: AppShellProps) {
           data-label={item.label}
           aria-label={item.label}
           aria-current={active ? "page" : undefined}
-          onClick={() => setMobileOpen(false)}
+          onClick={closeMobileNavigation}
         >
           <span className="app-nav-link-content">
             <Icon name={item.icon} />
@@ -97,12 +125,12 @@ export function AppShell({ children }: AppShellProps) {
           aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
           aria-expanded={mobileOpen}
           aria-controls="workspace-navigation"
-          onClick={() => setMobileOpen((open) => !open)}
+        onClick={() => { if (mobileOpen) closeMobileNavigation(); else setMobileOpen(true); }}
         >
           <Icon name={mobileOpen ? "close" : "menu"} />
         </button>
-        <div className="mobile-brand"><ToothMark /><span>Brightview Dental</span></div>
-        <button type="button" className="avatar-button" aria-label="Open account menu">MP</button>
+        <div className="mobile-brand" aria-hidden={mobileOpen || undefined}><ToothMark /><span>Brightview Dental</span></div>
+        <button type="button" className="avatar-button" aria-label="Open account menu" inert={mobileOpen || undefined} aria-hidden={mobileOpen || undefined}>MP</button>
       </header>
 
       <aside
@@ -113,6 +141,9 @@ export function AppShell({ children }: AppShellProps) {
         data-collapsed={desktopCollapsed ? "true" : "false"}
         aria-hidden={navigationHidden ? true : undefined}
         inert={navigationHidden || undefined}
+        role={isNarrowViewport && mobileOpen ? "dialog" : undefined}
+        aria-modal={isNarrowViewport && mobileOpen ? "true" : undefined}
+        aria-label={isNarrowViewport && mobileOpen ? "Workspace navigation" : undefined}
       >
         <div className="brand-block">
           <ToothMark />
@@ -144,7 +175,7 @@ export function AppShell({ children }: AppShellProps) {
         </button>
       </aside>
       {mobileOpen ? <button type="button" className="nav-backdrop" aria-label="Close navigation" onClick={closeMobileNavigation} /> : null}
-      <main className="workspace-main">{children}</main>
+      <main className="workspace-main" inert={isNarrowViewport && mobileOpen || undefined} aria-hidden={isNarrowViewport && mobileOpen || undefined}>{children}</main>
     </div>
   );
 }

@@ -284,6 +284,67 @@ export const voiceScenarioCorpus: VoiceScenario[] = [
       ],
     },
   },
+  {
+    id: "identity-and-relative-callback",
+    title: "Identity and tomorrow at the same time in one reply",
+    callerTurns: [
+      spoken("confirm_identity_and_defer", "You have the right person, but I'm heading out. Try me this time tomorrow.", "Speaking. Can't chat now, tomorrow at this hour?"),
+      spoken("confirm_callback_readback", "Yes, that works."),
+    ],
+    expected: {
+      forbiddenChanges: ["appointment.rescheduled", "appointment.cancelled", "callback.unconfirmed"],
+      requiredFacts: ["no_repeated_greeting", "relative_callback_resolved", "callback_confirmed", "demo_callback_disclosed"],
+      resultState: "staff_follow_up",
+      toolOrder: ["verify_identity", "request_staff_follow_up"],
+    },
+  },
+  {
+    id: "tentative-evening-callback",
+    title: "Tentative callback period without redundant questions",
+    callerTurns: [
+      spoken("confirm_identity", "Yes, you are."),
+      spoken("defer_with_tentative_period", "I'm tied up. Could we try tomorrow evening maybe?", "Now isn't good. Tomorrow evening might work."),
+      spoken("confirm_callback_window", "That window is fine, yes."),
+    ],
+    expected: {
+      forbiddenChanges: ["appointment.rescheduled", "appointment.cancelled", "callback.unconfirmed"],
+      requiredFacts: ["no_repeated_greeting", "callback_window_retained", "callback_confirmed", "demo_callback_disclosed"],
+      resultState: "staff_follow_up",
+      toolOrder: ["verify_identity", "request_staff_follow_up"],
+    },
+  },
+  {
+    id: "compound-preferences-repeat-and-correct",
+    title: "Compound preferences, repeated options, and correction in one reply",
+    callerTurns: [
+      spoken("confirm_identity", "That's me."),
+      spoken("provider_and_time_preference", "A different dentist is okay. Just make it after lunch."),
+      spoken("repeat_current_options", "Could you read those same choices once more?"),
+      spoken("correct_selection_in_same_turn", "Number one, no sorry, I meant number three."),
+      spoken("confirm_reschedule", "Yes, please make that change."),
+    ],
+    expected: {
+      forbiddenChanges: [...rescheduleForbidden, "discarded_slot.booked", "repeated_batch.advanced"],
+      requiredFacts: ["time_constraint", "batch_repeated", "corrected_slot", "change_confirmed"],
+      resultState: "rescheduled",
+      toolOrder: rescheduleTools,
+    },
+  },
+  {
+    id: "decline-rescheduling-without-cancelling",
+    title: "Declining rescheduling does not authorize cancellation",
+    callerTurns: [
+      spoken("confirm_identity", "Speaking."),
+      spoken("decline_rescheduling", "I'd rather not rearrange it."),
+      spoken("decline_cancellation_and_end", "No, don't cancel anything. Let's leave it there. Goodbye."),
+    ],
+    expected: {
+      forbiddenChanges: ["appointment.rescheduled", "appointment.cancelled"],
+      requiredFacts: ["cancellation_offered_not_assumed", "safe_termination"],
+      resultState: "unchanged",
+      toolOrder: ["verify_identity"],
+    },
+  },
 ];
 
 function collapseRepeatableReads(sequence: string[]) {

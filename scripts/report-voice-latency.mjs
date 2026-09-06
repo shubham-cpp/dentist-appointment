@@ -1,8 +1,15 @@
-import { readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { opendir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-const defaultLogPath = join(tmpdir(), "dentist-management-system-voice-gateway.jsonl");
+const attemptIdLimit = 512;
+const metricSampleLimit = 2_048;
+const maxMetricsFileBytes = 1_048_576;
+const metricNames = [
+  "greetingLatencyMs",
+  "interruptionLatencyMs",
+  "toolLatencyMs",
+  "turnLatencyMs",
+];
 
 function argument(name) {
   const index = process.argv.indexOf(name);
@@ -18,140 +25,158 @@ function percentile(sorted, percentage) {
   return sorted[index];
 }
 
-function statistics(values) {
-  const sorted = values.filter(Number.isFinite).sort((left, right) => left - right);
-  if (sorted.length === 0) return undefined;
-  return {
-    count: sorted.length,
-    maxMs: sorted.at(-1),
-    meanMs: Math.round(sorted.reduce((total, value) => total + value, 0) / sorted.length),
-    minMs: sorted[0],
-    p50Ms: percentile(sorted, 0.5),
-    p95Ms: percentile(sorted, 0.95),
-  };
+class BoundedAttemptIds {
+  #values = [];
+
+  add(value) {
+    if (this.#values.length === attemptIdLimit) this.#values.shift();
+    this.#values.push(value);
+  }
+
+  values() {
+    return [...this.#values];
+  }
 }
 
-function parseEntries(source) {
-  const entries = [];
-  for (const [index, line] of source.split(/\r?\n/).entries()) {
-    if (!line.trim()) continue;
+class OnlineStatistics {
+  #count = 0;
+  #maximum;
+  #minimum;
+  #sampleCount = 0;
+  #samples = [];
+  #total = 0;
+
+  addSeries(values, summary) {
+    const validValues = values.filter(Number.isFinite);
+    const hasCompleteSummary = Number.isInteger(summary?.count)
+      && summary.count >= validValues.length
+      && (summary.count === 0 || (
+        Number.isFinite(summary.meanMs)
+        && Number.isFinite(summary.minMs)
+        && Number.isFinite(summary.maxMs)
+      ));
+    const summaryCount = hasCompleteSummary
+      ? summary.count
+      : validValues.length;
+    const summaryMean = hasCompleteSummary
+      ? summary.meanMs
+      : validValues.reduce((total, value) => total + value, 0) / Math.max(1, validValues.length);
+    const summaryMinimum = hasCompleteSummary
+      ? summary.minMs
+      : validValues.length > 0 ? Math.min(...validValues) : undefined;
+    const summaryMaximum = hasCompleteSummary
+      ? summary.maxMs
+      : validValues.length > 0 ? Math.max(...validValues) : undefined;
+    if (summaryCount > 0) {
+      this.#count += summaryCount;
+      this.#total += summaryMean * summaryCount;
+      this.#minimum = this.#minimum === undefined
+        ? summaryMinimum
+        : Math.min(this.#minimum, summaryMinimum);
+      this.#maximum = this.#maximum === undefined
+        ? summaryMaximum
+        : Math.max(this.#maximum, summaryMaximum);
+    }
+    for (const value of validValues) this.#addSample(value);
+  }
+
+  result() {
+    if (this.#count === 0) return undefined;
+    const sorted = [...this.#samples].sort((left, right) => left - right);
+    return {
+      count: this.#count,
+      maxMs: this.#maximum,
+      meanMs: Math.round(this.#total / this.#count),
+      minMs: this.#minimum,
+      p50Ms: percentile(sorted, 0.5),
+      p95Ms: percentile(sorted, 0.95),
+    };
+  }
+
+  #addSample(value) {
+    this.#sampleCount += 1;
+    if (this.#samples.length < metricSampleLimit) {
+      this.#samples.push(value);
+      return;
+    }
+    const candidate = (Math.imul(this.#sampleCount, 2_654_435_761) >>> 0) % this.#sampleCount;
+    if (candidate < metricSampleLimit) this.#samples[candidate] = value;
+  }
+}
+
+function validateMetrics(value, path) {
+  if (!value || typeof value !== "object") throw new Error(`Invalid metrics file: ${path}`);
+  for (const name of metricNames) {
+    if (!Array.isArray(value[name]) || value[name].some((entry) => !Number.isFinite(entry))) {
+      throw new Error(`Invalid ${name} in metrics file: ${path}`);
+    }
+  }
+  return value;
+}
+
+async function* voiceArtifactMetrics(artifactsRoot) {
+  const directory = await opendir(artifactsRoot);
+  for await (const entry of directory) {
+    if (!entry.isDirectory() || !entry.name.startsWith("voice_")) continue;
+    const metricsPath = join(artifactsRoot, entry.name, "metrics.json");
+    let fileStats;
     try {
-      entries.push(JSON.parse(line));
-    } catch {
-      throw new Error(`Invalid JSON on log line ${index + 1}.`);
+      fileStats = await stat(metricsPath);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
     }
+    if (fileStats.size > maxMetricsFileBytes) {
+      throw new Error(`Metrics file exceeds ${maxMetricsFileBytes} bytes: ${metricsPath}`);
+    }
+    let metrics;
+    try {
+      metrics = JSON.parse(await readFile(metricsPath, "utf8"));
+    } catch (error) {
+      throw new Error(`Invalid JSON in metrics file: ${metricsPath}`, { cause: error });
+    }
+    yield { attemptId: entry.name, metrics: validateMetrics(metrics, metricsPath) };
   }
-  return entries;
 }
 
-function traceIdentifier(data) {
-  return data?.attemptId ?? data?.commandId ?? data?.traceId;
-}
-
-export function buildLatencyReport(entries, requestedTrace) {
-  const traceIds = [...new Set(entries
-    .map((entry) => traceIdentifier(entry.data))
-    .filter((value) => typeof value === "string"))];
-  const traceId = requestedTrace ?? traceIds.at(-1);
-  const selected = traceId
-    ? entries.filter((entry) => traceIdentifier(entry.data) === traceId)
-    : entries;
-
-  const stageValues = new Map();
-  for (const entry of selected) {
-    if (entry.event !== "voice.latency") continue;
-    const stage = entry.data?.stage;
-    const elapsedMs = entry.data?.elapsedMs;
-    if (typeof stage !== "string" || !Number.isFinite(elapsedMs)) continue;
-    const values = stageValues.get(stage) ?? [];
-    values.push(elapsedMs);
-    stageValues.set(stage, values);
-  }
-  if (!stageValues.has("user_history_to_first_assistant_text")) {
-    let lastRole;
-    let lastUserAtMs;
-    const derived = [];
-    for (const entry of selected) {
-      if (entry.event !== "telnyx.standalone_assistant_diagnostic"
-        || entry.data?.eventType !== "call.ai_gather.message_history_updated"
-        || !Array.isArray(entry.data?.messageHistory)) {
-        continue;
-      }
-      const occurredAtMs = Date.parse(entry.data.occurredAt);
-      const role = entry.data.messageHistory.at(-1)?.role;
-      if (!Number.isFinite(occurredAtMs) || typeof role !== "string") continue;
-      if (role === "user") lastUserAtMs = occurredAtMs;
-      if (role === "assistant" && lastRole === "user" && lastUserAtMs !== undefined) {
-        derived.push(Math.max(0, occurredAtMs - lastUserAtMs));
-      }
-      lastRole = role;
-    }
-    if (derived.length > 0) {
-      stageValues.set("user_history_to_first_assistant_text", derived);
+export async function aggregateVoiceArtifactMetrics(attempts) {
+  const attemptIds = new BoundedAttemptIds();
+  const series = Object.fromEntries(metricNames.map((name) => [name, new OnlineStatistics()]));
+  let attemptCount = 0;
+  for await (const attempt of attempts) {
+    attemptCount += 1;
+    attemptIds.add(attempt.attemptId);
+    for (const name of metricNames) {
+      series[name].addSeries(attempt.metrics[name], attempt.metrics.summary?.[name]);
     }
   }
-
-  const toolValues = new Map();
-  for (const entry of selected) {
-    if (entry.event !== "telnyx.assistant_tool.completed") continue;
-    const route = entry.data?.route;
-    const durationMs = entry.data?.durationMs;
-    if (typeof route !== "string" || !Number.isFinite(durationMs)) continue;
-    const values = toolValues.get(route) ?? [];
-    values.push(durationMs);
-    toolValues.set(route, values);
-  }
-
-  const timelineEvents = new Set([
-    "telnyx.assistant_tool.completed",
-    "telnyx.assistant_tool.failed",
-    "telnyx.assistant_tool.started",
-    "voice.media.speech_ended",
-    "voice.media.speech_started",
-    "voice.turn.assistant_text_started",
-    "voice.turn.user_text_update",
-    "voice.latency",
-  ]);
   return {
-    availableTraceIds: traceIds,
-    media: {
-      frameCount: selected.filter((entry) => entry.event === "voice.media.frame").length,
-      inboundFrameCount: selected.filter(
-        (entry) => entry.event === "voice.media.frame" && entry.data?.track === "inbound",
-      ).length,
-      outboundFrameCount: selected.filter(
-        (entry) => entry.event === "voice.media.frame" && entry.data?.track === "outbound",
-      ).length,
+    attempts: { count: attemptCount, ids: attemptIds.values() },
+    limits: {
+      attemptIds: attemptIdLimit,
+      maxMetricsFileBytes,
+      metricSamples: metricSampleLimit,
     },
-    stages: Object.fromEntries(
-      [...stageValues.entries()].map(([stage, values]) => [stage, statistics(values)]),
-    ),
-    timeline: selected
-      .filter((entry) => timelineEvents.has(entry.event))
-      .map((entry) => ({
-        data: Object.fromEntries(Object.entries(entry.data ?? {}).filter(([key]) => (
-          !["messageHistory", "payload", "requestBody", "result"].includes(key)
-        ))),
-        event: entry.event,
-        timestamp: entry.timestamp,
-      })),
-    tools: Object.fromEntries(
-      [...toolValues.entries()].map(([route, values]) => [route, statistics(values)]),
-    ),
-    traceId,
+    metrics: Object.fromEntries(metricNames.map((name) => [name, series[name].result()])),
   };
 }
 
-function rowsForStatistics(values) {
-  return Object.entries(values).map(([name, stats]) => [
-    name,
-    String(stats.count),
-    String(stats.minMs),
-    String(stats.p50Ms),
-    String(stats.p95Ms),
-    String(stats.maxMs),
-    String(stats.meanMs),
-  ]);
+export function buildLatencyReportFromArtifacts(artifactsRoot) {
+  return aggregateVoiceArtifactMetrics(voiceArtifactMetrics(artifactsRoot));
+}
+
+function rowsForStatistics(metrics) {
+  return Object.entries(metrics)
+    .filter(([, values]) => values)
+    .map(([name, values]) => [
+      name,
+      String(values.count),
+      String(values.minMs),
+      String(values.p50Ms),
+      String(values.p95Ms),
+      String(values.maxMs),
+      String(values.meanMs),
+    ]);
 }
 
 function renderTable(headers, rows) {
@@ -169,35 +194,22 @@ function renderTable(headers, rows) {
 }
 
 async function main() {
-  const logPath = argument("--log")
-    ?? process.env.VOICE_GATEWAY_DEBUG_LOG_PATH
-    ?? defaultLogPath;
-  const traceId = argument("--trace");
-  const report = buildLatencyReport(parseEntries(await readFile(logPath, "utf8")), traceId);
+  const artifactsRoot = argument("--artifacts")
+    ?? process.env.VOICE_ARTIFACTS_ROOT
+    ?? join(process.cwd(), ".voice-artifacts");
+  const report = await buildLatencyReportFromArtifacts(artifactsRoot);
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(report, null, 2));
     return;
   }
 
-  console.log(`Log: ${logPath}`);
-  console.log(`Trace: ${report.traceId ?? "all"}`);
-  console.log("\nLatency stages (milliseconds)");
+  console.log(`Artifacts: ${artifactsRoot}`);
+  console.log(`Finalized attempts: ${report.attempts.count}`);
+  console.log("\nLatency metrics (milliseconds)");
   console.log(renderTable(
-    ["stage", "n", "min", "p50", "p95", "max", "mean"],
-    rowsForStatistics(report.stages),
+    ["metric", "n", "min", "p50", "p95", "max", "mean"],
+    rowsForStatistics(report.metrics),
   ));
-  console.log("\nTool execution (milliseconds)");
-  console.log(renderTable(
-    ["route", "n", "min", "p50", "p95", "max", "mean"],
-    rowsForStatistics(report.tools),
-  ));
-  console.log(`\nMedia frames: ${report.media.frameCount}`);
-  console.log(`Inbound frames: ${report.media.inboundFrameCount}`);
-  console.log(`Outbound frames: ${report.media.outboundFrameCount}`);
-  console.log("\nTimeline");
-  for (const entry of report.timeline) {
-    console.log(`${entry.timestamp} ${entry.event} ${JSON.stringify(entry.data)}`);
-  }
 }
 
 if (process.argv[1] && import.meta.url === new URL(process.argv[1], "file:").href) {

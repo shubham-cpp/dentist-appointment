@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { attentionRows, type AttentionRow } from "@/lib/demo-data";
+import { attentionRows, minutesToTime, type AttentionRow } from "@/lib/demo-data";
+import { PRACTICE_DAY, PRACTICE_TIME_MINUTES } from "@/lib/calendar-workspace-model";
+import { dashboardAttentionHref } from "@/lib/dashboard-navigation";
 import type { DemoReschedulingCase } from "@/lib/demo-rescheduling-types";
 import { DemoReschedulingPanel } from "./demo-rescheduling-panel";
 import { Icon, type IconName } from "./icon";
 
 const arrivingNext = [
-  { time: "10:55 AM", patient: "Noah Brown", type: "Hygiene visit", provider: "Dr Patel", state: "Arriving" },
+  { time: "10:55 AM", patient: "Noah Brown", type: "Hygiene visit", provider: "Dr Chen", state: "Arriving" },
   { time: "11:25 AM", patient: "Michael Thompson", type: "Consultation", provider: "Dr Chen", state: "Expected" },
   { time: "11:35 AM", patient: "Ava Chen", type: "Exam", provider: "Dr Patel", state: "Checked in" },
 ];
@@ -40,12 +42,6 @@ function queueIcon(row: AttentionRow): IconName {
   if (row.geometry === "finance") return "card";
   if (row.geometry === "booking") return "calendar";
   return "clipboard";
-}
-
-function queueHref(row: AttentionRow) {
-  if (row.geometry === "clinical") return "/clinical";
-  if (row.geometry === "finance") return "/billing";
-  return `/calendar?selected=${row.id}`;
 }
 
 function PriorityLabel({ row }: { row: AttentionRow }) {
@@ -83,7 +79,7 @@ function CriticalQueueItem({ row }: { row: AttentionRow }) {
 
       <div className="queue-critical-footer">
         <p><strong>{row.owner}</strong> owns this decision. {row.whyNow}</p>
-        <Link href={queueHref(row)} className="button button-primary" aria-label={`${row.action} for ${row.patient}`}>
+        <Link href={dashboardAttentionHref(row)} className="button button-primary" aria-label={`${row.action} for ${row.patient}`}>
           {row.action}<Icon name="chevron-right" size={16} />
         </Link>
       </div>
@@ -107,7 +103,7 @@ function CompactQueueItem({ row }: { row: AttentionRow }) {
           <small>{row.owner} · {row.detail}</small>
         </div>
       </div>
-      <Link href={queueHref(row)} className="queue-compact-action" aria-label={`${row.action} for ${row.patient}`}>
+      <Link href={dashboardAttentionHref(row)} className="queue-compact-action" aria-label={`${row.action} for ${row.patient}`}>
         {row.action}<Icon name="chevron-right" size={16} />
       </Link>
     </li>
@@ -229,7 +225,7 @@ export function DashboardWorkspace({
   return (
     <div className="dashboard-page">
       <header className="page-header dashboard-header">
-        <div><h1>Tuesday, 8 August</h1><p>Northside clinic · Practice time 10:48 AM</p></div>
+        <div><h1>{PRACTICE_DAY.long.replace(", 2023", "")}</h1><p>Northside clinic · Practice time {minutesToTime(PRACTICE_TIME_MINUTES)}</p></div>
         <div className="header-actions">
           <button type="button" className="icon-button" aria-label="Open notifications, 5 unread"><Icon name="bell" /><span className="notification-dot" aria-hidden="true">5</span></button>
           <Link href="/calendar?new=1" className="button button-primary"><Icon name="plus" size={16} />New appointment</Link>

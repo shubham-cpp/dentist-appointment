@@ -33,13 +33,26 @@ function required(value: unknown, name: string) {
   return value;
 }
 
+function explicitOptIn(name: string) {
+  const value = process.env[name];
+  if (!value || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error(`${name} must be true or false.`);
+}
+
 const publicBaseUrl = process.env.VOICE_GATEWAY_PUBLIC_BASE_URL;
 if (!publicBaseUrl) throw new Error("VOICE_GATEWAY_PUBLIC_BASE_URL is required.");
 if (new URL(publicBaseUrl).protocol !== "https:") {
   throw new Error("VOICE_GATEWAY_PUBLIC_BASE_URL must use HTTPS.");
 }
 
-const draft = createTelnyxAssistantDraft({ publicBaseUrl });
+const dataRetentionEnabled = explicitOptIn("VOICE_PROVIDER_DATA_RETENTION_ENABLED");
+const recordingEnabled = explicitOptIn("VOICE_RECORDING_ENABLED");
+const draft = createTelnyxAssistantDraft({
+  dataRetentionEnabled,
+  publicBaseUrl,
+  recordingEnabled,
+});
 if (!process.argv.includes("--apply")) {
   console.log(JSON.stringify({
     action: process.env.TELNYX_AI_ASSISTANT_ID ? "synchronize-assistant" : "create-new-assistant",
@@ -64,8 +77,10 @@ const configuredAssistantId = process.env.TELNYX_AI_ASSISTANT_ID;
 const result = configuredAssistantId
   ? await synchronizeTelnyxCandidateAssistant({
       assistantId: configuredAssistantId,
+      dataRetentionEnabled,
       dependencies: client,
       publicBaseUrl,
+      recordingEnabled,
     })
   : undefined;
 const assistant = result

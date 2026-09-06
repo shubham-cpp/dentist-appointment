@@ -29,7 +29,7 @@ function experimentWebSocketUrl(publicBaseUrl: string, attemptId: string) {
 }
 
 export function createTwilioCandidateGreeting(context: VoiceCallContext) {
-  return `Hello, this is Willow calling from ${context.clinicName}. Am I speaking with ${context.patientName}?`;
+  return `Hello, this is Willow, an automated assistant calling from ${context.clinicName}. Am I speaking with ${context.patientName}?`;
 }
 
 export function createTwilioCandidateTwiML(input: {
@@ -73,16 +73,19 @@ export function createTwilioCandidateCallRequest(input: {
   attemptId: string;
   callToNumber: string;
   publicBaseUrl: string;
+  recordCall?: boolean;
   twilioPhoneNumber: string;
 }) {
   const root = baseUrl(input.publicBaseUrl);
   const attempt = encodeURIComponent(input.attemptId);
   return {
     from: input.twilioPhoneNumber,
-    record: true,
-    recordingChannels: "dual" as const,
-    recordingStatusCallback: `${root}/voice-experiment/twilio/recording?attempt=${attempt}`,
-    recordingStatusCallbackEvent: ["completed", "failed"] as const,
+    record: input.recordCall === true,
+    ...(input.recordCall === true ? {
+      recordingChannels: "dual" as const,
+      recordingStatusCallback: `${root}/voice-experiment/twilio/recording?attempt=${attempt}`,
+      recordingStatusCallbackEvent: ["completed", "failed"] as const,
+    } : {}),
     statusCallback: `${root}/voice-experiment/twilio/status?attempt=${attempt}`,
     statusCallbackEvent: ["initiated", "ringing", "answered", "completed"] as const,
     statusCallbackMethod: "POST" as const,

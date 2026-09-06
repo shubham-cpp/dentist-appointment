@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createVoiceCallContext } from "@/lib/voice-call-context";
-import { createVoiceSchedulingAuthority } from "./scheduling-authority";
+import { createVoiceSchedulingAuthority } from "@/voice-core/scheduling-authority";
 import {
   createOpenAiVoiceDialogueModel,
   createTwilioCandidateSystemPrompt,
@@ -68,6 +68,8 @@ test("keeps model and tool history across generated turns", async () => {
     runner,
     scheduling: createVoiceSchedulingAuthority({ context: createVoiceCallContext() }),
   });
+
+  assert.equal("prefetch" in model, false);
 
   for await (const token of model.generate({
     callerText: "I need to move my appointment.",

@@ -11,7 +11,6 @@ export type VoiceDialogueTurn = {
 
 export type VoiceDialogueModel = {
   generate(turn: VoiceDialogueTurn): AsyncIterable<string>;
-  prefetch?(turn: VoiceDialogueTurn): Promise<void>;
 };
 
 export type TwilioTextMessage = {
@@ -26,7 +25,6 @@ export type TwilioDialogueSession = {
   close(): void;
   interrupt(): void;
   respond(callerText: string): Promise<{ status: "completed" | "interrupted"; text: string }>;
-  revisePartial(callerText: string): void;
 };
 
 export function createTwilioDialogueSession(options: {
@@ -35,26 +33,18 @@ export function createTwilioDialogueSession(options: {
 }): TwilioDialogueSession {
   const history: VoiceDialogueMessage[] = [];
   let activeGeneration: AbortController | undefined;
-  let speculativeGeneration: AbortController | undefined;
   let closed = false;
-
-  function abortSpeculation() {
-    speculativeGeneration?.abort();
-    speculativeGeneration = undefined;
-  }
 
   return {
     close() {
       closed = true;
       activeGeneration?.abort();
-      abortSpeculation();
     },
     interrupt() {
       activeGeneration?.abort();
     },
     async respond(callerText) {
       if (closed) throw new Error("The dialogue session is closed.");
-      abortSpeculation();
       activeGeneration?.abort();
       const controller = new AbortController();
       activeGeneration = controller;
@@ -100,19 +90,6 @@ export function createTwilioDialogueSession(options: {
       } finally {
         if (activeGeneration === controller) activeGeneration = undefined;
       }
-    },
-    revisePartial(callerText) {
-      if (closed || !options.model.prefetch) return;
-      abortSpeculation();
-      const controller = new AbortController();
-      speculativeGeneration = controller;
-      void options.model.prefetch({
-        callerText,
-        history: structuredClone(history),
-        signal: controller.signal,
-      }).catch(() => undefined).finally(() => {
-        if (speculativeGeneration === controller) speculativeGeneration = undefined;
-      });
     },
   };
 }

@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ import { z } from "zod";
 import {
   VoiceAttemptStore,
   type VoiceAttemptTransportStatus,
-} from "./attempt-store";
+} from "@/voice-core/attempt-store";
 import {
   isControlledVoiceAttemptActive,
   isControlledVoiceAttemptTransportTerminal,
@@ -19,14 +19,19 @@ import {
 import {
   FileControlledCallLease,
   type ControlledCallLease,
-} from "./controlled-call-lease";
+} from "@/voice-core/controlled-call-lease";
+import { assertControlledCallSafetyPolicy } from "@/voice-core/call-safety-policy";
 import { VoiceConversationSession } from "./conversation-session";
 import { initialVoiceGreeting, staffFollowUpText } from "./conversation";
 import { gatewayWebSocketUrl, loadVoiceGatewayConfig, type VoiceGatewayConfig } from "./config";
 import { createLocalCodexIntentClassifier, type VoiceIntentClassifier } from "./intent-classifier";
 import { RelayTerminalPlayback } from "./relay-terminal-playback";
-import { voiceGatewayInternalSecretHeader } from "@/lib/voice-gateway-internal";
 import { createVoiceCallContext, voiceCallContextSchema } from "@/lib/voice-call-context";
+import { stopActiveCallsBeforeShutdown } from "@/voice-core/terminal-call-shutdown";
+import {
+  createInternalVoiceRequestAuthorizer,
+  registerControlledAttemptReadRoutes,
+} from "@/voice-runtime/internal-attempt-routes";
 
 const callbackQuerySchema = z.object({ attempt: z.string().uuid().or(z.string().startsWith("voice_")) });
 const callSidSchema = z.string().regex(/^CA[a-fA-F0-9]{32}$/);
@@ -79,6 +84,9 @@ const knownRelayMessageTypes = new Set([
   "error",
   relayTokensPlayedEvent,
 ]);
+const maxRelayMessageBytes = 16 * 1_024;
+const maxQueuedRelayBytes = 64 * 1_024;
+const maxQueuedRelayMessages = 16;
 
 type TwilioClient = ReturnType<typeof twilio>;
 type RelaySocket = {
@@ -94,6 +102,7 @@ export type VoiceGatewayDependencies = {
   callerReplyRetryTimeoutMs?: number;
   controlledCallLease?: ControlledCallLease;
   createTwilioClient?: (config: VoiceGatewayConfig) => TwilioClient;
+  dialTimeoutMs?: number;
   intentClassifier?: VoiceIntentClassifier;
   partialPromptFinalizationMs?: number;
   shutdownStopTimeoutMs?: number;
@@ -114,13 +123,6 @@ function callStatusToTransportStatus(status: z.infer<typeof voiceStatusSchema>["
   };
 
   return statuses[status];
-}
-
-function compareSecrets(provided: string | undefined, expected: string) {
-  if (!provided) return false;
-  const expectedBuffer = Buffer.from(expected);
-  const providedBuffer = Buffer.from(provided);
-  return expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
 function formParameters(body: unknown) {
@@ -213,10 +215,10 @@ function controlledCallLeasePath(config: VoiceGatewayConfig) {
   return join(tmpdir(), `dentist-management-system-voice-${key}.json`);
 }
 
-export function createVoiceGateway(
+export function createVoiceGatewayRuntime(
   config: VoiceGatewayConfig,
   dependencies: VoiceGatewayDependencies = {},
-): FastifyInstance {
+): { app: FastifyInstance; close(): Promise<void> } {
   const attempts = dependencies.attempts ?? new VoiceAttemptStore();
   const controlledCallLease = dependencies.controlledCallLease
     ?? new FileControlledCallLease(controlledCallLeasePath(config));
@@ -225,12 +227,15 @@ export function createVoiceGateway(
   const callerReplyTimeoutMs = Math.max(1, dependencies.callerReplyTimeoutMs ?? 18_000);
   const callerReplyRetryTimeoutMs = Math.max(1, dependencies.callerReplyRetryTimeoutMs ?? 20_000);
   const partialPromptFinalizationMs = Math.max(1, dependencies.partialPromptFinalizationMs ?? 1_600);
+  const dialTimeoutMs = Math.max(1, dependencies.dialTimeoutMs ?? 10_000);
   const shutdownStopTimeoutMs = dependencies.shutdownStopTimeoutMs ?? 5_000;
   const terminalPlaybackTimeoutMs = dependencies.terminalPlaybackTimeoutMs ?? 15_000;
   const validateRequest = dependencies.validateRequest ?? ((signature, url, params) => (
     twilio.validateRequest(config.twilioAuthToken, signature, url, params)
   ));
   const app = Fastify({ logger: false });
+  const cancelRequestedAttempts = new Set<string>();
+  const callStopRequests = new Map<string, Promise<boolean>>();
   let readinessCheck: Promise<void> | undefined;
 
   void app.register(formbody);
@@ -257,21 +262,26 @@ export function createVoiceGateway(
     return false;
   }
 
-  app.addHook("onClose", async () => {
-    const stopResults = await Promise.all(attempts.getActiveCallStops().map(async ({ attemptId, callSid }) => {
-      const stopped = await requestCallStop(callSid);
-      if (stopped) await controlledCallLease.release(attemptId).catch(() => undefined);
-      return stopped;
-    }));
-    if (stopResults.some((stopped) => !stopped)) {
-      throw new Error("Twilio did not confirm every active call stop during shutdown.");
+  async function stopAttempt(attemptId: string) {
+    const attempt = attempts.getAttempt(attemptId);
+    if (!attempt) throw new Error("The controlled call is unavailable.");
+    cancelRequestedAttempts.add(attempt.id);
+    const stoppedAttempt = attempts.markCancelRequested(attempt.id);
+    if (!stoppedAttempt.providerCallId) return;
+    const inFlight = callStopRequests.get(attempt.id);
+    if (inFlight) {
+      if (await inFlight) return;
+    } else {
+      const operation = requestCallStop(stoppedAttempt.providerCallId);
+      callStopRequests.set(attempt.id, operation);
+      if (await operation) return;
+      callStopRequests.delete(attempt.id);
     }
-  });
-
-  function isInternalRequest(request: FastifyRequest) {
-    const secret = request.headers[voiceGatewayInternalSecretHeader];
-    return compareSecrets(typeof secret === "string" ? secret : undefined, config.internalSecret);
+    attempts.markTerminationUncertain(attempt.id);
+    throw new Error("Twilio did not accept the stop request.");
   }
+
+  const isInternalRequest = createInternalVoiceRequestAuthorizer(config.internalSecret);
 
   function isValidTwilioRequest(request: FastifyRequest) {
     const signature = request.headers["x-twilio-signature"];
@@ -360,63 +370,57 @@ export function createVoiceGateway(
       return reply.code(503).send({ error: "voice_safety_lock_unavailable" });
     }
 
+    try {
+      assertControlledCallSafetyPolicy(config);
+    } catch {
+      attempts.markFailed(attempt.id);
+      await controlledCallLease.cancel(attempt.id).catch(() => undefined);
+      return reply.code(503).send({ error: "voice_calls_disabled" });
+    }
+
     let call;
     try {
-      call = await twilioClient.calls.create({
-        from: config.twilioPhoneNumber,
-        record: false,
-        statusCallback: `${config.publicBaseUrl}/twilio/status?attempt=${encodeURIComponent(attempt.id)}`,
-        statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-        statusCallbackMethod: "POST",
-        timeLimit: 180,
-        timeout: 20,
-        to: config.callToNumber,
-        url: `${config.publicBaseUrl}/twilio/voice?attempt=${encodeURIComponent(attempt.id)}`,
-      });
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+      try {
+        call = await Promise.race([
+          twilioClient.calls.create({
+            from: config.twilioPhoneNumber,
+            record: false,
+            statusCallback: `${config.publicBaseUrl}/twilio/status?attempt=${encodeURIComponent(attempt.id)}`,
+            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
+            statusCallbackMethod: "POST",
+            timeLimit: 180,
+            timeout: 20,
+            to: config.callToNumber,
+            url: `${config.publicBaseUrl}/twilio/voice?attempt=${encodeURIComponent(attempt.id)}`,
+          }),
+          new Promise<never>((_resolve, reject) => {
+            deadline = setTimeout(() => reject(new Error("Twilio Dial result is uncertain.")), dialTimeoutMs);
+          }),
+        ]);
+      } finally {
+        if (deadline) clearTimeout(deadline);
+      }
 
     } catch {
       attempts.markCreationUncertain(attempt.id);
       return reply.code(202).send({ attempt: attempts.getView(attempt.id) });
     }
 
-    const updatedAttempt = attempts.bindCallSid(attempt.id, call.sid);
+    const updatedAttempt = attempts.bindProviderCallId(attempt.id, call.sid);
     if (updatedAttempt.transportStatus === "cancel_requested") {
       try {
-        await twilioClient.calls(call.sid).update({ status: "completed" });
-        attempts.markCanceled(attempt.id);
-        await controlledCallLease.release(attempt.id).catch(() => undefined);
+        await stopAttempt(attempt.id);
       } catch {
         return reply.code(202).send({ attempt: attempts.getView(attempt.id) });
       }
+      return reply.code(202).send({ attempt: attempts.getView(attempt.id) });
     }
 
     return reply.code(201).send({ attempt: attempts.getView(attempt.id) });
   });
 
-  app.get("/internal/controlled-attempt/by-request/:requestId", async (request, reply) => {
-    if (!isInternalRequest(request)) return reply.code(401).send({ error: "unauthorized" });
-    const params = request.params as { requestId?: string };
-    const requestId = requestIdSchema.safeParse(params.requestId);
-    if (!requestId.success) return reply.code(400).send({ error: "invalid_request_id" });
-    const attempt = attempts.getViewByRequestId(requestId.data);
-    if (!attempt) return reply.code(404).send({ error: "not_found" });
-    return { attempt };
-  });
-
-  app.get("/internal/controlled-attempt/current", async (request, reply) => {
-    if (!isInternalRequest(request)) return reply.code(401).send({ error: "unauthorized" });
-    const attempt = attempts.getActiveView();
-    if (!attempt) return reply.code(404).send({ error: "not_found" });
-    return { attempt };
-  });
-
-  app.get("/internal/controlled-attempt/:attemptId", async (request, reply) => {
-    if (!isInternalRequest(request)) return reply.code(401).send({ error: "unauthorized" });
-    const params = request.params as { attemptId?: string };
-    const attempt = params.attemptId ? attempts.getView(params.attemptId) : undefined;
-    if (!attempt) return reply.code(404).send({ error: "not_found" });
-    return { attempt };
-  });
+  registerControlledAttemptReadRoutes(app, { attempts, isAuthorized: isInternalRequest });
 
   app.post("/internal/controlled-attempt/:attemptId/stop", async (request, reply) => {
     if (!isInternalRequest(request)) return reply.code(401).send({ error: "unauthorized" });
@@ -426,19 +430,15 @@ export function createVoiceGateway(
     const attempt = attempts.getAttempt(params.attemptId);
     if (!attempt) return reply.code(404).send({ error: "not_found" });
 
-    const stoppedAttempt = attempts.markCancelRequested(attempt.id);
-    if (stoppedAttempt.transportStatus !== "cancel_requested") {
+    if (isControlledVoiceAttemptTransportTerminal(attempt.transportStatus)) {
       return { attempt: attempts.getView(attempt.id) };
     }
-    if (!stoppedAttempt.callSid) return reply.code(202).send({ attempt: attempts.getView(attempt.id) });
 
     try {
-      await twilioClient.calls(stoppedAttempt.callSid).update({ status: "completed" });
-      attempts.markCanceled(attempt.id);
-      await controlledCallLease.release(attempt.id).catch(() => undefined);
+      await stopAttempt(attempt.id);
       return { attempt: attempts.getView(attempt.id) };
     } catch {
-      return reply.code(502).send({ error: "Twilio did not confirm the stop request." });
+      return reply.code(502).send({ error: "Twilio did not accept the stop request." });
     }
   });
 
@@ -450,7 +450,13 @@ export function createVoiceGateway(
     if (!query.success || !body.success) return reply.code(400).send();
 
     try {
-      const attempt = attempts.bindCallSid(query.data.attempt, body.data.CallSid);
+      const attempt = attempts.bindProviderCallId(query.data.attempt, body.data.CallSid);
+      if (attempt.transportStatus === "cancel_requested" || cancelRequestedAttempts.has(attempt.id)) {
+        await stopAttempt(attempt.id).catch(() => undefined);
+        return reply.type("text/xml").send(
+          '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
+        );
+      }
       return reply.type("text/xml").send(createTwiML(
         config,
         attempt.id,
@@ -470,18 +476,27 @@ export function createVoiceGateway(
     if (!query.success || !body.success) return reply.code(400).send();
 
     try {
+      const current = attempts.getAttempt(query.data.attempt);
+      const nextStatus = body.data.CallStatus === "completed"
+        && current?.transportStatus === "cancel_requested"
+        ? "canceled"
+        : callStatusToTransportStatus(body.data.CallStatus);
       const updatedAttempt = attempts.updateStatus(
         query.data.attempt,
         body.data.CallSid,
-        callStatusToTransportStatus(body.data.CallStatus),
+        nextStatus,
         body.data.SequenceNumber,
       );
       if (isControlledVoiceAttemptTransportTerminal(updatedAttempt.transportStatus)) {
+        cancelRequestedAttempts.delete(updatedAttempt.id);
+        callStopRequests.delete(updatedAttempt.id);
         await controlledCallLease.release(updatedAttempt.id).catch(() => undefined);
       }
       return reply.code(204).send();
     } catch {
       if (isControlledVoiceAttemptTransportTerminal(callStatusToTransportStatus(body.data.CallStatus))) {
+        cancelRequestedAttempts.delete(query.data.attempt);
+        callStopRequests.delete(query.data.attempt);
         await controlledCallLease.release(query.data.attempt).catch(() => undefined);
         return reply.code(204).send();
       }
@@ -544,6 +559,11 @@ export function createVoiceGateway(
       let awaitingQuestionPlayback = false;
       let resetRetryAfterPlayback = true;
       let lastQuestionText = "";
+      type RelayMessage = z.infer<typeof relayMessageSchema>;
+      type QueuedRelayMessage = { bytes: number; message: RelayMessage };
+      const relayQueue: QueuedRelayMessage[] = [];
+      let queuedRelayBytes = 0;
+      let processingRelayQueue = false;
       const terminalPlayback = new RelayTerminalPlayback(
         terminalPlaybackTimeoutMs,
         (outcome, reason) => {
@@ -572,6 +592,8 @@ export function createVoiceGateway(
       function finishRelay() {
         if (relayEnded) return;
         relayEnded = true;
+        relayQueue.length = 0;
+        queuedRelayBytes = 0;
         clearCallerReplyDeadline();
         clearPartialPromptDeadline();
         terminalPlayback.reset();
@@ -705,42 +727,18 @@ export function createVoiceGateway(
         }
       }
 
-      async function handleRelayMessage(payload: Buffer) {
+      async function handleRelayMessage(message: RelayMessage) {
         if (relayEnded) return;
 
-        let message: unknown;
-        try {
-          message = JSON.parse(payload.toString());
-        } catch {
-          socket.close(1008, "Invalid Relay message.");
-          return;
-        }
-
-        const envelope = relayMessageEnvelopeSchema.safeParse(message);
-        if (!envelope.success) {
-          socket.close(1008, "Invalid Relay message.");
-          return;
-        }
-
-        const parsed = relayMessageSchema.safeParse(message);
-        if (!parsed.success) {
-          if (relayToken && !knownRelayMessageTypes.has(envelope.data.type)) {
-            attempts.recordRelayNotice(relayToken, "Voice service sent an unsupported event");
-            return;
-          }
-          socket.close(1008, "Unsupported Relay message.");
-          return;
-        }
-
-        if (parsed.data.type === "setup") {
+        if (message.type === "setup") {
           if (relayToken) {
             socket.close(1008, "Relay setup is already complete.");
             return;
           }
 
           try {
-            const candidateToken = parsed.data.customParameters.relayToken;
-            attempts.bindRelaySession(candidateToken, parsed.data.callSid, parsed.data.sessionId);
+            const candidateToken = message.customParameters.relayToken;
+            attempts.bindRelaySession(candidateToken, message.callSid, message.sessionId);
             relayToken = candidateToken;
             const callContext = attempts.getCallContextByRelayToken(candidateToken);
             conversation = new VoiceConversationSession(intentClassifier, callContext);
@@ -757,7 +755,7 @@ export function createVoiceGateway(
           return;
         }
 
-        if (parsed.data.type === relayTokensPlayedEvent) {
+        if (message.type === relayTokensPlayedEvent) {
           const terminalConfirmed = terminalPlayback.confirmPlayback();
           if (terminalConfirmed || terminalPlayback.isPending) return;
           if (awaitingQuestionPlayback) {
@@ -770,13 +768,13 @@ export function createVoiceGateway(
           return;
         }
 
-        if (parsed.data.type === "prompt" && !parsed.data.last) {
+        if (message.type === "prompt" && !message.last) {
           clearPartialPromptDeadline();
-          latestPartialPrompt = parsed.data.voicePrompt;
+          latestPartialPrompt = message.voicePrompt;
           armCallerReplyDeadline();
-          if (conversation?.canProcessLocally(parsed.data.voicePrompt)) {
-            const candidate = parsed.data.voicePrompt;
-            const partialLang = parsed.data.lang;
+          if (conversation?.canProcessLocally(message.voicePrompt)) {
+            const candidate = message.voicePrompt;
+            const partialLang = message.lang;
             partialPromptDeadline = setTimeout(() => {
               if (latestPartialPrompt !== candidate || relayEnded) return;
               void respondToCaller(candidate, "partial", partialLang);
@@ -786,12 +784,12 @@ export function createVoiceGateway(
           return;
         }
 
-        if (parsed.data.type === "prompt" && parsed.data.last) {
-          await respondToCaller(parsed.data.voicePrompt, "final", parsed.data.lang);
+        if (message.type === "prompt" && message.last) {
+          await respondToCaller(message.voicePrompt, "final", message.lang);
           return;
         }
 
-        if (parsed.data.type === "interrupt") {
+        if (message.type === "interrupt") {
           if (terminalPlayback.isPending) {
             terminalPlayback.cancel();
             conversation?.close();
@@ -806,16 +804,88 @@ export function createVoiceGateway(
           return;
         }
 
-        if (parsed.data.type === "error") {
+        if (message.type === "error") {
           attempts.recordRelayNotice(relayToken, "Voice service reported an error");
           endForStaffFollowUp("Voice service reported an error", true);
         }
       }
 
-      socket.on("message", (payload: Buffer) => {
-        void handleRelayMessage(payload).catch(() => {
+      function parseRelayPayload(payload: Buffer): RelayMessage | undefined {
+        if (payload.byteLength > maxRelayMessageBytes) {
+          socket.close(1009, "Relay message is too large.");
+          return undefined;
+        }
+        let value: unknown;
+        try {
+          value = JSON.parse(payload.toString());
+        } catch {
+          socket.close(1008, "Invalid Relay message.");
+          return undefined;
+        }
+        const envelope = relayMessageEnvelopeSchema.safeParse(value);
+        if (!envelope.success) {
+          socket.close(1008, "Invalid Relay message.");
+          return undefined;
+        }
+        const parsed = relayMessageSchema.safeParse(value);
+        if (parsed.success) return parsed.data;
+        if (relayToken && !knownRelayMessageTypes.has(envelope.data.type)) {
+          attempts.recordRelayNotice(relayToken, "Voice service sent an unsupported event");
+          return undefined;
+        }
+        socket.close(1008, "Unsupported Relay message.");
+        return undefined;
+      }
+
+      async function drainRelayQueue() {
+        if (processingRelayQueue || relayEnded) return;
+        processingRelayQueue = true;
+        try {
+          while (!relayEnded && relayQueue.length > 0) {
+            const entry = relayQueue.shift()!;
+            queuedRelayBytes -= entry.bytes;
+            await handleRelayMessage(entry.message);
+          }
+        } catch {
           endForStaffFollowUp("Gateway ended the call safely", true);
-        });
+        } finally {
+          processingRelayQueue = false;
+        }
+      }
+
+      function dispatchRelayMessage(message: RelayMessage, bytes: number) {
+        if (message.type === "interrupt") {
+          void handleRelayMessage(message).catch(() => {
+            endForStaffFollowUp("Gateway ended the call safely", true);
+          });
+          return;
+        }
+        const last = relayQueue.at(-1);
+        if (message.type === "prompt" && !message.last
+          && last?.message.type === "prompt" && !last.message.last) {
+          queuedRelayBytes -= last.bytes;
+          if (queuedRelayBytes + bytes > maxQueuedRelayBytes) {
+            endForStaffFollowUp("Voice connection backlog exceeded its limit", true);
+            return;
+          }
+          last.bytes = bytes;
+          last.message = message;
+          queuedRelayBytes += bytes;
+          return;
+        }
+        if (relayQueue.length >= maxQueuedRelayMessages
+          || queuedRelayBytes + bytes > maxQueuedRelayBytes) {
+          endForStaffFollowUp("Voice connection backlog exceeded its limit", true);
+          return;
+        }
+        relayQueue.push({ bytes, message });
+        queuedRelayBytes += bytes;
+        void drainRelayQueue();
+      }
+
+      socket.on("message", (payload: Buffer) => {
+        const message = parseRelayPayload(payload);
+        if (message) dispatchRelayMessage(message, payload.byteLength);
       });
 
       socket.on("error", () => {
@@ -825,6 +895,8 @@ export function createVoiceGateway(
       socket.on("close", () => {
         if (!relayToken) return;
         relayEnded = true;
+        relayQueue.length = 0;
+        queuedRelayBytes = 0;
         clearCallerReplyDeadline();
         clearPartialPromptDeadline();
         terminalPlayback.reset();
@@ -839,23 +911,35 @@ export function createVoiceGateway(
     });
   });
 
-  return app;
+  const close = async () => {
+    await stopActiveCallsBeforeShutdown({
+      attempts,
+      controller: { stop: stopAttempt },
+      isFinalized: (attemptId) => !attempts.getActiveProviderCallStops()
+        .some((attempt) => attempt.attemptId === attemptId),
+      timeoutMs: shutdownStopTimeoutMs,
+    });
+    await app.close();
+  };
+  return { app, close };
 }
 
 export async function startGateway(
   environment: Record<string, string | undefined> = process.env,
 ) {
   const config = loadVoiceGatewayConfig(environment);
-  const app = createVoiceGateway(config);
+  const { app, close } = createVoiceGatewayRuntime(config);
   await app.listen({ host: "127.0.0.1", port: config.gatewayPort });
 
-  const close = async () => {
-    await app.close();
-    process.exit(0);
-  };
-
-  process.once("SIGINT", () => void close());
-  process.once("SIGTERM", () => void close());
+  const shutdown = () => void close()
+    .then(() => process.exit(0))
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : "Voice gateway shutdown failed.");
+      process.exitCode = 1;
+    });
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+  return { app, close };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

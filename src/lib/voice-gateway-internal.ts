@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { isLoopbackHttpUrl } from "./loopback-url";
 
@@ -16,6 +17,14 @@ export type VoiceGatewayInternalSettings = {
   internalSecret: string;
   internalUrl: string;
 };
+
+export function constantTimeEqualSecrets(provided: string | undefined, expected: string) {
+  if (provided === undefined) return false;
+  const providedBytes = Buffer.from(provided);
+  const expectedBytes = Buffer.from(expected);
+  return providedBytes.length === expectedBytes.length
+    && timingSafeEqual(providedBytes, expectedBytes);
+}
 
 export function createVoiceGatewayInternalRequestInit(
   internalSecret: string,

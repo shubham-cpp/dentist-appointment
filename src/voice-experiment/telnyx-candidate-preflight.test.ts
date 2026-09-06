@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createTelnyxAssistantDraft, TELNYX_MAEVE_VOICE } from "./telnyx-candidate";
 import {
+  createTelnyxCandidatePreflight,
   TelnyxCandidatePreflightError,
   runTelnyxCandidatePreflight,
 } from "./telnyx-candidate-preflight";
@@ -56,7 +57,7 @@ test("reports the old assistant as a failed hypothesis instead of accepting it",
     assistant: {
       ...createTelnyxAssistantDraft({ publicBaseUrl: "https://voice.example.test" }),
       id: "assistant-test",
-      model: "openai/gpt-5.6-luna",
+      model: "openai/gpt-5.6-sol",
       privacy_settings: { data_retention: false },
       telephony_settings: {
         recording_settings: { channels: "dual", enabled: false, format: "mp3", stop_on_conversation_end: false },
@@ -162,4 +163,67 @@ test("rejects assistant tool drift even when every tool name still matches", asy
       );
     });
   }
+});
+
+test("deduplicates concurrent preflight checks and caches success for 30 seconds", async () => {
+  let nowMs = 1_000;
+  let providerReads = 0;
+  let releaseProvider: (() => void) | undefined;
+  const dependencies = readyDependencies();
+  dependencies.readProvider = async () => {
+    providerReads += 1;
+    await new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    return readyDependencies().readProvider();
+  };
+  const preflight = createTelnyxCandidatePreflight({
+    assistantId: "assistant-test",
+    assistantVersionId: "version-test",
+    dependencies,
+    now: () => nowMs,
+    publicBaseUrl: "https://voice.example.test",
+  });
+
+  const first = preflight();
+  const second = preflight();
+  assert.equal(providerReads, 1);
+  releaseProvider?.();
+  await Promise.all([first, second]);
+
+  await preflight();
+  assert.equal(providerReads, 1);
+  nowMs += 30_000;
+  const refreshed = preflight();
+  releaseProvider?.();
+  await refreshed;
+  assert.equal(providerReads, 2);
+});
+
+test("caches failed preflight checks for no more than one second", async () => {
+  let nowMs = 1_000;
+  let providerReads = 0;
+  const dependencies = readyDependencies();
+  dependencies.readProvider = async () => {
+    providerReads += 1;
+    return {
+      ...await readyDependencies().readProvider(),
+      accountReady: false,
+    };
+  };
+  const preflight = createTelnyxCandidatePreflight({
+    assistantId: "assistant-test",
+    assistantVersionId: "version-test",
+    dependencies,
+    now: () => nowMs,
+    publicBaseUrl: "https://voice.example.test",
+  });
+
+  await assert.rejects(preflight, TelnyxCandidatePreflightError);
+  await assert.rejects(preflight, TelnyxCandidatePreflightError);
+  assert.equal(providerReads, 1);
+
+  nowMs += 1_000;
+  await assert.rejects(preflight, TelnyxCandidatePreflightError);
+  assert.equal(providerReads, 2);
 });

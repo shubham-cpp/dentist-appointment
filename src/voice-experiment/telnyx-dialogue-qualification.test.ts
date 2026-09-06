@@ -12,7 +12,7 @@ import {
 test("builds one flexible web-chat test for every shared scenario", () => {
   const drafts = createTelnyxDialogueTestDrafts("assistant-test");
 
-  assert.equal(drafts.length, 12);
+  assert.equal(drafts.length, voiceScenarioCorpus.length);
   assert.deepEqual(
     drafts.map((draft) => draft.scenarioId),
     voiceScenarioCorpus.map((scenario) => scenario.id),
@@ -22,13 +22,13 @@ test("builds one flexible web-chat test for every shared scenario", () => {
   assert.ok(drafts.every((draft) => draft.test_suite === TELNYX_DIALOGUE_TEST_SUITE));
   assert.ok(drafts.every((draft) => draft.rubric.length === 4));
   assert.ok(drafts.every((draft) => /paraphrase|adapt naturally/i.test(draft.instructions)));
-  assert.ok(drafts.every((draft) => /Never combine numbered steps/i.test(draft.instructions)));
+  assert.ok(drafts.every((draft) => /Do not include the step number/i.test(draft.instructions)));
   assert.ok(drafts.every((draft) => /replace Jamie with Olivia/i.test(draft.instructions)));
   assert.ok(drafts.every((draft) => /first reply must contain only step 1/i.test(draft.instructions)));
   assert.ok(drafts.every((draft) => !draft.rubric[3]!.criteria.includes("operation ID")));
 });
 
-test("keeps tool names in evaluation criteria, not caller directions", () => {
+test("keeps internal tool checks separate from spoken conversation grading", () => {
   const drafts = createTelnyxDialogueTestDrafts("assistant-test");
   const toolNames = [
     "verify_identity",
@@ -42,7 +42,8 @@ test("keeps tool names in evaluation criteria, not caller directions", () => {
     assert.ok(toolNames.every((name) => !draft.instructions.includes(name)));
     assert.doesNotMatch(draft.instructions, /record_identity|search_slots|commit_reschedule/);
   }
-  assert.match(JSON.stringify(drafts[0]?.rubric), /verify_identity/);
+  assert.doesNotMatch(JSON.stringify(drafts[0]?.rubric), /verify_identity|prepare_change/);
+  assert.match(JSON.stringify(drafts[0]?.rubric), /Do not require date of birth/);
 });
 
 test("compares provider records and checks provider plus local tool evidence", () => {

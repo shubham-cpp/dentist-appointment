@@ -80,25 +80,17 @@ test("cancels interrupted output without ending the conversation", async () => {
   ]);
 });
 
-test("cancels speculative work when a partial transcript changes", async () => {
-  const signals: AbortSignal[] = [];
+test("makes one model request for each final caller turn", async () => {
+  const callerTexts: string[] = [];
   const model: VoiceDialogueModel = {
-    async *generate() {
+    async *generate(turn) {
+      callerTexts.push(turn.callerText);
       yield "final";
-    },
-    async prefetch(turn) {
-      signals.push(turn.signal);
-      await new Promise<void>((resolve) => turn.signal.addEventListener("abort", () => resolve(), { once: true }));
     },
   };
   const session = createTwilioDialogueSession({ model, send() {} });
 
-  session.revisePartial("Can you move");
-  await new Promise((resolve) => setImmediate(resolve));
-  session.revisePartial("Can you move it to Thursday");
-  await new Promise((resolve) => setImmediate(resolve));
   await session.respond("Can you move it to Thursday?");
 
-  assert.equal(signals.length, 2);
-  assert.equal(signals.every((signal) => signal.aborted), true);
+  assert.deepEqual(callerTexts, ["Can you move it to Thursday?"]);
 });

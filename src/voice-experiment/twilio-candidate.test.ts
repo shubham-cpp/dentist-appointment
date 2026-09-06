@@ -29,12 +29,12 @@ test("builds the locked Twilio ConversationRelay configuration", () => {
   assert.match(xml, /g6xIsTj2HwM6VR4iXFCw-flash_v2_5-1\.0_0\.5_0\.75/);
   assert.match(
     xml,
-    /Hello, this is Willow calling from Brightview Dental\. Am I speaking with Olivia Garcia\?/,
+    /Hello, this is Willow, an automated assistant calling from Brightview Dental\. Am I speaking with Olivia Garcia\?/,
   );
   assert.doesNotMatch(JSON.stringify(twilioCandidateDefaults), /apiKey|deepgram.*key/i);
 });
 
-test("creates a recorded fixed-destination call request", () => {
+test("keeps fixed-destination call recording off by default", () => {
   const request = createTwilioCandidateCallRequest({
     attemptId: "voice_twilio_2",
     callToNumber: "+12025550111",
@@ -44,10 +44,7 @@ test("creates a recorded fixed-destination call request", () => {
 
   assert.deepEqual(request, {
     from: "+12025550112",
-    record: true,
-    recordingChannels: "dual",
-    recordingStatusCallback: "https://voice.example.test/voice-experiment/twilio/recording?attempt=voice_twilio_2",
-    recordingStatusCallbackEvent: ["completed", "failed"],
+    record: false,
     statusCallback: "https://voice.example.test/voice-experiment/twilio/status?attempt=voice_twilio_2",
     statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
     statusCallbackMethod: "POST",
@@ -56,4 +53,22 @@ test("creates a recorded fixed-destination call request", () => {
     to: "+12025550111",
     url: "https://voice.example.test/voice-experiment/twilio/twiml?attempt=voice_twilio_2",
   });
+});
+
+test("adds recording callbacks only after explicit opt-in", () => {
+  const request = createTwilioCandidateCallRequest({
+    attemptId: "voice_twilio_2",
+    callToNumber: "+12025550111",
+    publicBaseUrl: "https://voice.example.test",
+    recordCall: true,
+    twilioPhoneNumber: "+12025550112",
+  });
+
+  assert.equal(request.record, true);
+  assert.equal(request.recordingChannels, "dual");
+  assert.equal(
+    request.recordingStatusCallback,
+    "https://voice.example.test/voice-experiment/twilio/recording?attempt=voice_twilio_2",
+  );
+  assert.deepEqual(request.recordingStatusCallbackEvent, ["completed", "failed"]);
 });

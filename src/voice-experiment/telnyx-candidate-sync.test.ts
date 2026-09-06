@@ -58,10 +58,44 @@ test("promotes one complete version when a tunnel rotates", async () => {
   )));
   assert.deepEqual(tools.at(-1), {
     hangup: {
-      description: "End the call after a brief closing when the caller clearly asks to end it.",
+      description: "End the call after a brief closing when the change is committed, staff follow-up is recorded, identity fails, or the caller clearly asks to end it.",
     },
     type: "hangup",
   });
+});
+
+test("keeps explicit recording and retention opt-ins in the promoted version", async () => {
+  const updates: Array<Record<string, unknown>> = [];
+  await synchronizeTelnyxCandidateAssistant({
+    assistantId: "assistant-test",
+    dataRetentionEnabled: true,
+    dependencies: {
+      async getAssistant() {
+        return {
+          ...createTelnyxAssistantDraft({ publicBaseUrl: "https://expired.example.test" }),
+          id: "assistant-test",
+          version_id: "version-old",
+        };
+      },
+      async updateAssistant(_assistantId, body) {
+        updates.push(body);
+        return { id: "assistant-test", version_id: "version-private-opt-in" };
+      },
+    },
+    publicBaseUrl: "https://active.example.test",
+    recordingEnabled: true,
+  });
+
+  assert.deepEqual(updates[0]?.privacy_settings, { data_retention: true });
+  assert.deepEqual(
+    (updates[0]?.telephony_settings as Record<string, unknown>)?.recording_settings,
+    {
+      channels: "dual",
+      enabled: true,
+      format: "mp3",
+      stop_on_conversation_end: true,
+    },
+  );
 });
 
 test("fails before startup when Telnyx omits the active version ID", async () => {

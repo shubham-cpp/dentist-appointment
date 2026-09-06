@@ -1,41 +1,84 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { buildLatencyReport } from "./report-voice-latency.mjs";
+import {
+  aggregateVoiceArtifactMetrics,
+  buildLatencyReportFromArtifacts,
+} from "./report-voice-latency.mjs";
 
-test("summarizes one trace without exposing transcript or audio payloads", () => {
-  const entries = [
-    {
-      data: { attemptId: "voice_1", elapsedMs: 2_100, stage: "user_history_to_first_assistant_text" },
-      event: "voice.latency",
-      timestamp: "2026-08-26T12:00:00.000Z",
-    },
-    {
-      data: { attemptId: "voice_1", elapsedMs: 1_900, stage: "user_history_to_first_assistant_text" },
-      event: "voice.latency",
-      timestamp: "2026-08-26T12:00:01.000Z",
-    },
-    {
-      data: { attemptId: "voice_1", durationMs: 25, requestBody: { private: true }, route: "slots/search" },
-      event: "telnyx.assistant_tool.completed",
-      timestamp: "2026-08-26T12:00:02.000Z",
-    },
-    {
-      data: { attemptId: "voice_1", payload: "raw-audio", track: "inbound" },
-      event: "voice.media.frame",
-      timestamp: "2026-08-26T12:00:03.000Z",
-    },
-  ];
+function metrics(values) {
+  return {
+    greetingLatencyMs: values.greeting ?? [],
+    interruptionLatencyMs: values.interruption ?? [],
+    summary: {},
+    toolLatencyMs: values.tool ?? [],
+    turnLatencyMs: values.turn ?? [],
+  };
+}
 
-  const report = buildLatencyReport(entries, "voice_1");
-  assert.deepEqual(report.stages.user_history_to_first_assistant_text, {
+test("aggregates current voice artifact metrics", async () => {
+  const report = await aggregateVoiceArtifactMetrics([
+    { attemptId: "voice_1", metrics: metrics({ greeting: [300], turn: [700, 900] }) },
+    { attemptId: "voice_2", metrics: metrics({ greeting: [500], tool: [20], turn: [800] }) },
+  ]);
+
+  assert.deepEqual(report.metrics.greetingLatencyMs, {
     count: 2,
-    maxMs: 2_100,
-    meanMs: 2_000,
-    minMs: 1_900,
-    p50Ms: 1_900,
-    p95Ms: 2_100,
+    maxMs: 500,
+    meanMs: 400,
+    minMs: 300,
+    p50Ms: 300,
+    p95Ms: 500,
   });
-  assert.equal(report.tools["slots/search"].meanMs, 25);
-  assert.equal(report.media.inboundFrameCount, 1);
-  assert.doesNotMatch(JSON.stringify(report.timeline), /private|raw-audio/);
+  assert.deepEqual(report.metrics.turnLatencyMs, {
+    count: 3,
+    maxMs: 900,
+    meanMs: 800,
+    minMs: 700,
+    p50Ms: 800,
+    p95Ms: 900,
+  });
+  assert.equal(report.attempts.count, 2);
+});
+
+test("streams finalized metrics files and skips unfinished attempts", async () => {
+  const artifactsRoot = await mkdtemp(join(tmpdir(), "voice-artifacts-"));
+  const completeDirectory = join(artifactsRoot, "voice_complete");
+  await mkdir(completeDirectory);
+  await writeFile(
+    join(completeDirectory, "metrics.json"),
+    `${JSON.stringify(metrics({ interruption: [120], tool: [25] }))}\n`,
+  );
+  await mkdir(join(artifactsRoot, "voice_unfinished"));
+
+  const report = await buildLatencyReportFromArtifacts(artifactsRoot);
+
+  assert.equal(report.attempts.count, 1);
+  assert.deepEqual(report.attempts.ids, ["voice_complete"]);
+  assert.equal(report.metrics.interruptionLatencyMs.p95Ms, 120);
+  assert.equal(report.metrics.toolLatencyMs.meanMs, 25);
+});
+
+test("bounds retained attempt IDs and percentile samples", async () => {
+  async function* attempts() {
+    for (let index = 0; index < 1_200; index += 1) {
+      yield {
+        attemptId: `voice_${index}`,
+        metrics: metrics({ turn: [index + 1] }),
+      };
+    }
+  }
+
+  const report = await aggregateVoiceArtifactMetrics(attempts());
+
+  assert.equal(report.attempts.count, 1_200);
+  assert.equal(report.attempts.ids.length, 512);
+  assert.equal(report.metrics.turnLatencyMs.count, 1_200);
+  assert.deepEqual(report.limits, {
+    attemptIds: 512,
+    maxMetricsFileBytes: 1_048_576,
+    metricSamples: 2_048,
+  });
 });

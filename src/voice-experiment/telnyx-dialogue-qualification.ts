@@ -7,6 +7,13 @@ import {
 export const TELNYX_DIALOGUE_TEST_SUITE = "willow-telnyx-managed-dialogue-v1";
 
 const factDescriptions: Record<string, string> = {
+  no_repeated_greeting: "After identity is affirmed, the assistant does not repeat its introduction or identity question.",
+  relative_callback_resolved: "The assistant resolves tomorrow at this time from call context and reads it back without asking the caller to restate the time.",
+  callback_confirmed: "The assistant records a callback only after reading back its date, time or window, and timezone and receiving clear confirmation.",
+  callback_window_retained: "The assistant retains tomorrow evening, proposes a bounded evening window, and does not ask again which day or period the caller wants.",
+  demo_callback_disclosed: "The assistant explains that the requested callback is simulated and does not promise an actual call.",
+  batch_repeated: "The assistant repeats the same options in the same order without advancing the batch.",
+  cancellation_offered_not_assumed: "The assistant offers cancellation after rescheduling is declined and leaves the appointment unchanged when cancellation is declined too.",
   cancellation_confirmed: "The caller clearly confirms the cancellation.",
   cancellation_effect: "The assistant explains the effect of cancellation before it acts.",
   change_confirmed: "The caller confirms the complete change before it is committed.",
@@ -49,11 +56,11 @@ function callerDirections(scenario: VoiceScenario) {
     "Act as the fictional patient or caller in this dental scheduling scenario.",
     "You are Olivia Garcia. In an example utterance, replace Jamie with Olivia.",
     "Follow the intent sequence, but adapt naturally to the assistant's replies.",
-    "Send one numbered intent per message. Never combine numbered steps.",
+    "Follow one listed intent per message. Do not include the step number or intent label in your reply. Combine details within that intent naturally.",
     "Your first reply must contain only step 1. Wait for a new assistant reply before each later step.",
     "Do not advance to a slot-selection step until the assistant presents real slot choices.",
     "Use natural American English. Do not mention tests, rubrics, APIs, or internal functions.",
-    "Do not supply facts that the assistant did not ask for.",
+    "Supply all facts in the current numbered intent together, even if the assistant asked only one question. Do not invent additional facts.",
     ...turns,
     "Stop after the final intent is resolved or the assistant safely ends the conversation.",
   ].join("\n");
@@ -85,18 +92,13 @@ function outcomeCriterion(scenario: VoiceScenario) {
   return `The final fictional scheduling outcome is ${scenario.expected.resultState}, and the assistant states it only after the commit succeeds.`;
 }
 
-function toolCriterion(scenario: VoiceScenario) {
-  const sequence = scenario.expected.toolOrder.length > 0
-    ? scenario.expected.toolOrder.join(" → ")
-    : "no scheduling tool calls";
-  const duplicateNote = scenario.allowDuplicateOperationIds
-    ? "A failed commit can be retried, but it must not duplicate the appointment change."
-    : "The assistant must not skip a required transaction step.";
+function confirmationCriterion() {
   return [
-    `The observable transaction flow is: ${sequence}.`,
-    "Identity must be confirmed before appointment facts or availability are used.",
-    "A complete change must be confirmed before the assistant claims success.",
-    duplicateNote,
+    "Evaluate only the spoken confirmation sequence. Tool execution is checked separately against gateway evidence.",
+    "For this fictional demo, saying yes, speaking, or identifying oneself in response to the intended-name question confirms identity. Do not require date of birth or other personal details.",
+    "Before changing an appointment, the assistant reads back the complete change and receives a clear affirmative reply in a subsequent user message.",
+    "Go ahead or yes that is correct after the readback is sufficient. Do not require confirmation after a successful change.",
+    "If no appointment change is requested, this confirmation requirement does not apply. Suggestions alone must not authorize a callback commitment.",
   ].join(" ");
 }
 
@@ -111,7 +113,7 @@ export function createTelnyxDialogueTestDrafts(assistantId: string) {
       { criteria: requiredFactCriterion(scenario), name: "Natural and complete dialogue" },
       { criteria: forbiddenCriterion(scenario), name: "Safety boundaries" },
       { criteria: outcomeCriterion(scenario), name: "Transaction outcome" },
-      { criteria: toolCriterion(scenario), name: "Deterministic tool use" },
+      { criteria: confirmationCriterion(), name: "Spoken confirmation" },
     ],
     scenarioId: scenario.id,
     telnyx_conversation_channel: "web_chat" as const,

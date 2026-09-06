@@ -5,14 +5,15 @@ import { fileURLToPath } from "node:url";
 import { createOpenAI, type OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import twilio from "twilio";
-import { FileControlledCallLease } from "@/voice-gateway/controlled-call-lease";
-import { VoiceAttemptStore } from "@/voice-gateway/attempt-store";
+import { FileControlledCallLease } from "@/voice-core/controlled-call-lease";
+import { VoiceAttemptStore } from "@/voice-core/attempt-store";
+import { stopActiveCallsBeforeShutdown } from "@/voice-core/terminal-call-shutdown";
 import { createTwilioCandidateCallController } from "./twilio-call-controller";
 import { loadTwilioCandidateConfig } from "./twilio-candidate-config";
 import { createTwilioCandidateGateway } from "./twilio-candidate-gateway";
 import {
   checkTwilioVoiceVerification,
-  runTwilioCandidatePreflight,
+  createTwilioCandidatePreflight,
 } from "./twilio-candidate-preflight";
 
 async function checkModelReady(config: ReturnType<typeof loadTwilioCandidateConfig>) {
@@ -60,40 +61,37 @@ export async function startTwilioCandidateServer(
   const client = twilio(config.twilioAccountSid, config.twilioAuthToken);
   const attempts = new VoiceAttemptStore();
 
-  async function preflight() {
-    const result = await runTwilioCandidatePreflight({
-      async checkAccount() {
-        const [account, numbers] = await Promise.all([
-          client.api.accounts(config.twilioAccountSid).fetch(),
-          client.incomingPhoneNumbers.list({ phoneNumber: config.twilioPhoneNumber, limit: 1 }),
-        ]);
-        const active = account.status === "active";
-        return {
-          active,
-          recordingAvailable: active,
-          sourceNumberOwned: numbers.some((item) => item.phoneNumber === config.twilioPhoneNumber),
-        };
-      },
-      async checkCallback() {
-        try {
-          const response = await fetch(`${config.publicBaseUrl}/health`, {
-            cache: "no-store",
-            redirect: "error",
-            signal: AbortSignal.timeout(5_000),
-          });
-          const value = await response.json() as { runtime?: unknown; status?: unknown };
-          return response.ok && value.runtime === "twilio-candidate" && value.status === "ok";
-        } catch {
-          return false;
-        }
-      },
-      checkModel: () => checkModelReady(config),
-      checkVoice: () => checkTwilioVoiceVerification({
-        path: join(config.artifactsRoot, "preflight", "twilio-voice.json"),
-      }),
-    });
-    result.assertReady();
-  }
+  const preflight = createTwilioCandidatePreflight({
+    async checkAccount() {
+      const [account, numbers] = await Promise.all([
+        client.api.accounts(config.twilioAccountSid).fetch(),
+        client.incomingPhoneNumbers.list({ phoneNumber: config.twilioPhoneNumber, limit: 1 }),
+      ]);
+      const active = account.status === "active";
+      return {
+        active,
+        recordingAvailable: active,
+        sourceNumberOwned: numbers.some((item) => item.phoneNumber === config.twilioPhoneNumber),
+      };
+    },
+    async checkCallback() {
+      try {
+        const response = await fetch(`${config.publicBaseUrl}/health`, {
+          cache: "no-store",
+          redirect: "error",
+          signal: AbortSignal.timeout(5_000),
+        });
+        const value = await response.json() as { runtime?: unknown; status?: unknown };
+        return response.ok && value.runtime === "twilio-candidate" && value.status === "ok";
+      } catch {
+        return false;
+      }
+    },
+    checkModel: () => checkModelReady(config),
+    checkVoice: () => checkTwilioVoiceVerification({
+      path: join(config.artifactsRoot, "preflight", "twilio-voice.json"),
+    }),
+  });
 
   const controller = createTwilioCandidateCallController({
     attempts,
@@ -123,9 +121,12 @@ export async function startTwilioCandidateServer(
   await app.listen({ host: "127.0.0.1", port: config.gatewayPort });
 
   const close = async () => {
-    for (const active of attempts.getActiveCallStops()) {
-      await controller.stop(active.attemptId).catch(() => undefined);
-    }
+    await stopActiveCallsBeforeShutdown({
+      attempts,
+      controller,
+      isFinalized: (attemptId) => controller.evidence(attemptId) === undefined,
+      timeoutMs: 10_000,
+    });
     await app.close();
   };
   return { app, close };
@@ -133,7 +134,13 @@ export async function startTwilioCandidateServer(
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   void startTwilioCandidateServer().then(({ close }) => {
-    process.once("SIGINT", () => void close().then(() => process.exit(0)));
-    process.once("SIGTERM", () => void close().then(() => process.exit(0)));
+    const shutdown = () => void close()
+      .then(() => process.exit(0))
+      .catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : "Voice gateway shutdown failed.");
+        process.exitCode = 1;
+      });
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
   });
 }

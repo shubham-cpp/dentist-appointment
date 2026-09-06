@@ -14,7 +14,10 @@ import {
   type ControlledVoiceAttempt,
   type ControlledVoiceAttemptTransportStatus,
 } from "@/lib/controlled-voice-attempt";
-import { nextControlledVoicePollDelay } from "@/lib/controlled-voice-polling";
+import {
+  MAX_CONTROLLED_VOICE_POLL_RETRIES,
+  nextControlledVoicePollDelay,
+} from "@/lib/controlled-voice-polling";
 import {
   type DemoReschedulingAction,
   type DemoReschedulingCase,
@@ -90,6 +93,10 @@ function ReplacementSlotSummary({ slot }: { slot: DemoReschedulingSlot }) {
   );
 }
 
+function sameReschedulingCase(left: DemoReschedulingCase, right: DemoReschedulingCase) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function DemoReschedulingPanel({
   initialReschedulingCase,
 }: {
@@ -106,6 +113,8 @@ export function DemoReschedulingPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [voiceAttempt, setVoiceAttempt] = useState<ControlledVoiceAttempt | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [pollingPaused, setPollingPaused] = useState(false);
+  const [pollRetryToken, setPollRetryToken] = useState(0);
   const [callConfirmationOpen, setCallConfirmationOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const callConfirmationRef = useRef<HTMLDialogElement>(null);
@@ -132,7 +141,9 @@ export function DemoReschedulingPanel({
     void getCurrentControlledVoiceAttemptAction()
       .then((result) => {
         if (disposed || !result.ok) return;
-        setReschedulingCase(result.reschedulingCase);
+        setReschedulingCase((current) => sameReschedulingCase(current, result.reschedulingCase)
+          ? current
+          : result.reschedulingCase);
         setVoiceAttempt((current) => (
           !current || current.id === result.attempt.id ? result.attempt : current
         ));
@@ -153,13 +164,20 @@ export function DemoReschedulingPanel({
   useEffect(() => {
     const attemptId = activeVoiceAttemptId;
     if (!attemptId) return;
+    const activeAttemptId = attemptId;
 
     let stopped = false;
     let timeout: number | undefined;
     let gatewayFailureCount = 0;
+    let refreshPending = false;
 
     function scheduleRefresh(id: string, delay: number) {
-      if (!stopped) timeout = window.setTimeout(() => void refreshVoiceAttempt(id), delay);
+      if (stopped) return;
+      if (document.hidden) {
+        refreshPending = true;
+        return;
+      }
+      timeout = window.setTimeout(() => void refreshVoiceAttempt(id), delay);
     }
 
     async function refreshVoiceAttempt(id: string) {
@@ -168,8 +186,13 @@ export function DemoReschedulingPanel({
         result = await getControlledVoiceAttemptAction(id);
       } catch {
         if (!stopped) {
+          const delay = nextControlledVoicePollDelay("gateway_unavailable", gatewayFailureCount);
+          if (delay === undefined) {
+            setPollingPaused(true);
+            setVoiceError(`The voice gateway did not respond after ${MAX_CONTROLLED_VOICE_POLL_RETRIES} retries. Retry the status check when the gateway is available.`);
+            return;
+          }
           setVoiceError("The voice gateway did not return a status. The dashboard will try again.");
-          const delay = nextControlledVoicePollDelay("gateway_unavailable", gatewayFailureCount) ?? 8_000;
           gatewayFailureCount += 1;
           scheduleRefresh(id, delay);
         }
@@ -179,8 +202,11 @@ export function DemoReschedulingPanel({
 
       if (result.ok) {
         gatewayFailureCount = 0;
+        setPollingPaused(false);
         setVoiceError(null);
-        setReschedulingCase(result.reschedulingCase);
+        setReschedulingCase((current) => sameReschedulingCase(current, result.reschedulingCase)
+          ? current
+          : result.reschedulingCase);
         setVoiceAttempt((current) => (
           current?.id === result.attempt.id && current.updatedAt === result.attempt.updatedAt
             ? current
@@ -189,42 +215,46 @@ export function DemoReschedulingPanel({
         if (isControlledVoiceAttemptActive(result.attempt)) scheduleRefresh(id, 2_000);
         return;
       } else {
-        setVoiceError(result.message);
         if (result.code === "not_found") {
-          setVoiceAttempt((current) => {
-            if (!current || current.id !== id) return current;
-
-            const timestamp = new Date().toISOString();
-            return {
-              ...current,
-              outcome: "unknown",
-              sessionStatus: "errored",
-              transportStatus: "unknown",
-              updatedAt: timestamp,
-              events: [{
-                id: "gateway-restart",
-                label: "Gateway restarted. Call result is unknown.",
-                timestamp,
-              }, ...current.events],
-            };
-          });
+          setVoiceAttempt((current) => current?.id === id ? null : current);
+          setVoiceError("The gateway restarted, so the last test call result is unavailable. Review a new test call to try again.");
           return;
         }
 
+        setVoiceError(result.message);
         const delay = nextControlledVoicePollDelay(result.code, gatewayFailureCount);
         if (delay !== undefined) {
           gatewayFailureCount += 1;
           scheduleRefresh(id, delay);
+        } else if (result.code === "gateway_unavailable") {
+          setPollingPaused(true);
+          setVoiceError(`The voice gateway did not respond after ${MAX_CONTROLLED_VOICE_POLL_RETRIES} retries. Retry the status check when the gateway is available.`);
         }
       }
     }
 
-    void refreshVoiceAttempt(attemptId);
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        if (timeout !== undefined) window.clearTimeout(timeout);
+        timeout = undefined;
+        refreshPending = true;
+        return;
+      }
+      if (refreshPending) {
+        refreshPending = false;
+        void refreshVoiceAttempt(activeAttemptId);
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (document.hidden) refreshPending = true;
+    else void refreshVoiceAttempt(activeAttemptId);
     return () => {
       stopped = true;
       if (timeout !== undefined) window.clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeVoiceAttemptId]);
+  }, [activeVoiceAttemptId, pollRetryToken]);
 
   const selectedSlot = reschedulingCase.slots.find((slot) => slot.id === reschedulingCase.selectedSlotId);
   const statusDetails = reschedulingStatusDetails[reschedulingCase.status];
@@ -235,10 +265,12 @@ export function DemoReschedulingPanel({
 
     try {
       const result = await updateDemoReschedulingCaseAction(action, slotId);
-      setReschedulingCase(result.reschedulingCase);
-      setSelectedSlotId(result.reschedulingCase.selectedSlotId ?? result.reschedulingCase.slots[0]?.id ?? "");
+      const nextCase = "reschedulingCase" in result ? result.reschedulingCase : result;
+      setReschedulingCase(nextCase);
+      setSelectedSlotId(nextCase.selectedSlotId ?? nextCase.slots[0]?.id ?? "");
 
-      if (!result.ok) setActionError(result.message);
+      if ("ok" in result && !result.ok) setActionError(result.message);
+      else if (action === "reset-demo") setVoiceAttempt(null);
     } catch {
       setActionError("The demo state could not be updated. Try the action again.");
     } finally {
@@ -251,12 +283,18 @@ export function DemoReschedulingPanel({
     setActionError(null);
   }
 
+  function openCallConfirmation() {
+    setVoiceError(null);
+    setPollingPaused(false);
+    setCallConfirmationOpen(true);
+  }
+
   async function startControlledVoiceAttempt() {
     setVoiceError(null);
     setIsStartingVoice(true);
 
     try {
-      const result = await startControlledVoiceAttemptAction();
+      const result = await startControlledVoiceAttemptAction(voiceAttempt?.callback?.status === "requested" ? voiceAttempt.id : undefined);
       if (result.ok) {
         setVoiceAttempt(result.attempt);
         setReschedulingCase(result.reschedulingCase);
@@ -371,22 +409,36 @@ export function DemoReschedulingPanel({
 
             {voiceAttempt ? (
               <ol className="demo-rescheduling-live-activity" aria-label="Redacted phone demo activity">
-                {voiceAttempt.events.slice(0, 5).map((event) => <li key={event.id}>{event.label}</li>)}
+                {voiceAttempt.events.slice(0, 8).map((event) => <li key={event.id}>{event.label}</li>)}
               </ol>
             ) : null}
 
+            {voiceAttempt?.callback ? (
+              <p>Callback {voiceAttempt.callback.status === "requested" ? "requested" : "started"}: {voiceAttempt.callback.date} at {voiceAttempt.callback.time}{voiceAttempt.callback.timeEnd ? `–${voiceAttempt.callback.timeEnd}` : ""} ({voiceAttempt.callback.timeZone}). This demo requires an operator to start the callback.</p>
+            ) : null}
+            {voiceAttempt?.cooldownUntil ? (
+              <p>Next test call available after {new Date(voiceAttempt.cooldownUntil).toLocaleTimeString()}.</p>
+            ) : null}
             <div className="demo-rescheduling-actions">
+              {pollingPaused && hasActiveVoiceAttempt ? (
+                <button type="button" className="button button-secondary" onClick={() => { setPollingPaused(false); setVoiceError(null); setPollRetryToken((token) => token + 1); }}>
+                  Retry status
+                </button>
+              ) : null}
               {hasActiveVoiceAttempt ? (
                 <button type="button" className="button button-secondary" disabled={isStoppingVoice} onClick={() => void stopControlledVoiceAttempt()}>
                   {isStoppingVoice ? "Ending test call" : "End test call"}
                 </button>
               ) : (
-                <button type="button" className="button button-primary" disabled={isStartingVoice} onClick={() => setCallConfirmationOpen(true)}>
-                  <Icon name="phone" size={16} />Call my test phone
+                <button type="button" className="button button-primary" disabled={isStartingVoice} onClick={openCallConfirmation}>
+                  <Icon name="phone" size={16} />{voiceAttempt?.callback?.status === "requested" ? "Review callback" : "Review test call"}
                 </button>
               )}
             </div>
 
+            <p className="sr-only" role="status" aria-live="polite">
+              {voiceError ?? (activeVoiceAttemptLabel ? `Phone demo status: ${activeVoiceAttemptLabel}. ${voiceAttempt?.events[0]?.label ?? ""}` : "Phone demo ready.")}
+            </p>
             {voiceError ? <p className="demo-rescheduling-error" role="alert">{voiceError}</p> : null}
           </section>
 
@@ -433,7 +485,7 @@ export function DemoReschedulingPanel({
                 <p>{selectedSlot ? `${selectedSlot.date} at ${selectedSlot.time} with ${selectedSlot.provider}.` : "A selected slot is ready for review."} The original appointment remains unchanged.</p>
               </div>
               <div className="demo-rescheduling-actions">
-                <Link href={`/calendar?selected=${reschedulingCase.appointmentId}`} className="button button-secondary">Open appointment</Link>
+                <Link href={`/calendar?selected=appointment:${reschedulingCase.appointmentId}`} className="button button-secondary">Open appointment</Link>
                 <button type="button" className="button button-primary" disabled={isUpdating} onClick={() => void applyAction("reset-demo")}>Reset demo</button>
               </div>
             </section>
@@ -461,7 +513,7 @@ export function DemoReschedulingPanel({
                 <p>{reschedulingCase.originalAppointment} with {reschedulingCase.provider}. The old time is available again.</p>
               </div>
               <div className="demo-rescheduling-actions">
-                <Link href={`/calendar?selected=${reschedulingCase.appointmentId}`} className="button button-secondary">Open appointment</Link>
+                <Link href={`/calendar?selected=appointment:${reschedulingCase.appointmentId}`} className="button button-secondary">Open appointment</Link>
                 <button type="button" className="button button-primary" disabled={isUpdating} onClick={() => void applyAction("reset-demo")}>Reset demo</button>
               </div>
             </section>

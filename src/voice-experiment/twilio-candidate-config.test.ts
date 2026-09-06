@@ -26,7 +26,15 @@ test("loads an isolated Twilio candidate without direct Deepgram credentials", (
   assert.equal(config.aiModel, "gpt-5.6-luna-fast");
   assert.equal(config.callToNumber, "+12025550111");
   assert.equal(config.artifactsRoot, ".voice-artifacts");
+  assert.equal(config.recordingEnabled, false);
   assert.equal("deepgramApiKey" in config, false);
+});
+
+test("requires an explicit flag before it records calls", () => {
+  assert.equal(
+    loadTwilioCandidateConfig({ ...environment(), VOICE_RECORDING_ENABLED: "true" }).recordingEnabled,
+    true,
+  );
 });
 
 test("rejects an unsafe runtime or destination", () => {

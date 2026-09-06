@@ -15,10 +15,16 @@ function versionId(value: Record<string, unknown>) {
 
 export async function synchronizeTelnyxCandidateAssistant(options: {
   assistantId: string;
+  dataRetentionEnabled?: boolean;
   dependencies: SynchronizationDependencies;
   publicBaseUrl: string;
+  recordingEnabled?: boolean;
 }) {
-  const expected = createTelnyxAssistantDraft({ publicBaseUrl: options.publicBaseUrl });
+  const expected = createTelnyxAssistantDraft({
+    dataRetentionEnabled: options.dataRetentionEnabled,
+    publicBaseUrl: options.publicBaseUrl,
+    recordingEnabled: options.recordingEnabled,
+  });
   const current = await options.dependencies.getAssistant(options.assistantId);
   if (telnyxAssistantConfigurationMatches(current, expected)) {
     return { changed: false, versionId: versionId(current) } as const;

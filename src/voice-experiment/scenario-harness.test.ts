@@ -8,9 +8,9 @@ import {
   type VoiceScenarioObservation,
 } from "./scenario-harness";
 
-test("defines the twelve approved provider-neutral scenarios", () => {
-  assert.equal(voiceScenarioCorpus.length, 12);
-  assert.equal(new Set(voiceScenarioCorpus.map((scenario) => scenario.id)).size, 12);
+test("defines the provider-neutral conversation scenarios", () => {
+  assert.equal(voiceScenarioCorpus.length, 16);
+  assert.equal(new Set(voiceScenarioCorpus.map((scenario) => scenario.id)).size, voiceScenarioCorpus.length);
   for (const scenario of voiceScenarioCorpus) {
     assert.ok(scenario.callerTurns.length > 0, `${scenario.id} needs caller turns`);
     assert.ok(scenario.expected.requiredFacts.length > 0, `${scenario.id} needs spoken facts`);
@@ -164,7 +164,7 @@ test("runs a complete corpus and preserves every failed scenario", async () => {
   const report = await runVoiceScenarioCorpus({ adapter, mode: "simulation" });
 
   assert.equal(report.passed, false);
-  assert.equal(report.results.length, 12);
+  assert.equal(report.results.length, voiceScenarioCorpus.length);
   assert.deepEqual(report.failedScenarioIds, [failedId]);
-  assert.equal(report.passedCount, 11);
+  assert.equal(report.passedCount, voiceScenarioCorpus.length - 1);
 });

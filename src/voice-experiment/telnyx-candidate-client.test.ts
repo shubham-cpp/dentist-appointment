@@ -162,3 +162,54 @@ test("accepts direct assistant and voice catalog response shapes", async () => {
   assert.equal((await client.getAssistant("assistant-test")).version_id, "version-test");
   assert.deepEqual(await client.listVoices(), [{ id: "voice-test" }]);
 });
+
+test("applies a read deadline and rejects redirects", async () => {
+  let redirect: RequestRedirect | undefined;
+  const client = createTelnyxCandidateClient({
+    apiKey: "telnyx-test-key",
+    deadlines: { readMs: 5 },
+    fetch: async (_input, init) => {
+      redirect = init?.redirect;
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+      throw new Error("unreachable");
+    },
+  });
+
+  await assert.rejects(() => client.getBalance(), (error: unknown) => (
+    error instanceof Error && error.name === "TimeoutError"
+  ));
+  assert.equal(redirect, "error");
+});
+
+test("stops reading a response after the configured byte limit", async () => {
+  const client = createTelnyxCandidateClient({
+    apiKey: "telnyx-test-key",
+    maxResponseBytes: 16,
+    fetch: async () => new Response(JSON.stringify({ data: { value: "too large" } })),
+  });
+
+  await assert.rejects(() => client.getBalance(), /response exceeded 16 bytes/i);
+});
+
+test("does not retry a Dial request after its deadline expires", async () => {
+  let requests = 0;
+  const client = createTelnyxCandidateClient({
+    apiKey: "telnyx-test-key",
+    deadlines: { dialMs: 5 },
+    fetch: async (_input, init) => {
+      requests += 1;
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+      throw new Error("unreachable");
+    },
+  });
+
+  await assert.rejects(
+    () => client.dial({ command_id: "command-test" }),
+    (error: unknown) => error instanceof Error && error.name === "TelnyxDialUncertainError",
+  );
+  assert.equal(requests, 1);
+});

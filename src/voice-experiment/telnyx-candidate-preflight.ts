@@ -14,6 +14,16 @@ type TelnyxPreflightDependencies = {
   readProvider(): Promise<ProviderSnapshot>;
 };
 
+type TelnyxCandidatePreflightOptions = {
+  assistantId: string;
+  assistantVersionId: string;
+  dataRetentionEnabled?: boolean;
+  dependencies: TelnyxPreflightDependencies;
+  now?: () => number;
+  publicBaseUrl: string;
+  recordingEnabled?: boolean;
+};
+
 export type TelnyxCandidatePreflightCheck = { name: string; passed: boolean };
 
 export class TelnyxCandidatePreflightError extends Error {
@@ -105,6 +115,7 @@ export function telnyxAssistantConfigurationMatches(
     && privacy?.data_retention === expected.privacy_settings.data_retention
     && telephony?.send_message_history_updates === expected.telephony_settings.send_message_history_updates
     && telephony.time_limit_secs === expected.telephony_settings.time_limit_secs
+    && (telephony.user_idle_reply_secs ?? null) === (expected.telephony_settings.user_idle_reply_secs ?? null)
     && recording?.enabled === expected.telephony_settings.recording_settings.enabled
     && recording.channels === expected.telephony_settings.recording_settings.channels
     && recording.format === expected.telephony_settings.recording_settings.format
@@ -114,13 +125,12 @@ export function telnyxAssistantConfigurationMatches(
     && assistant.instructions === expected.instructions;
 }
 
-export async function runTelnyxCandidatePreflight(options: {
-  assistantId: string;
-  assistantVersionId: string;
-  dependencies: TelnyxPreflightDependencies;
-  publicBaseUrl: string;
-}) {
-  const expected = createTelnyxAssistantDraft({ publicBaseUrl: options.publicBaseUrl });
+export async function runTelnyxCandidatePreflight(options: TelnyxCandidatePreflightOptions) {
+  const expected = createTelnyxAssistantDraft({
+    dataRetentionEnabled: options.dataRetentionEnabled,
+    publicBaseUrl: options.publicBaseUrl,
+    recordingEnabled: options.recordingEnabled,
+  });
   const [provider, callbackReady] = await Promise.all([
     options.dependencies.readProvider(),
     options.dependencies.callbackReady(),
@@ -149,4 +159,41 @@ export async function runTelnyxCandidatePreflight(options: {
   const failedChecks = checks.filter((check) => !check.passed).map((check) => check.name);
   if (failedChecks.length > 0) throw new TelnyxCandidatePreflightError(failedChecks);
   return { checks };
+}
+
+export function createTelnyxCandidatePreflight(options: TelnyxCandidatePreflightOptions) {
+  type Result = Awaited<ReturnType<typeof runTelnyxCandidatePreflight>>;
+  const now = options.now ?? Date.now;
+  let inFlight: Promise<Result> | undefined;
+  let cachedSuccess: { expiresAt: number; result: Result } | undefined;
+  let cachedFailure: { error: unknown; expiresAt: number } | undefined;
+
+  return function preflight() {
+    const currentTime = now();
+    if (cachedSuccess && currentTime < cachedSuccess.expiresAt) {
+      return Promise.resolve(cachedSuccess.result);
+    }
+    if (cachedFailure && currentTime < cachedFailure.expiresAt) {
+      return Promise.reject(cachedFailure.error);
+    }
+    if (inFlight) return inFlight;
+
+    const execution = runTelnyxCandidatePreflight(options);
+    const shared = execution.then(
+      (result) => {
+        cachedSuccess = { expiresAt: now() + 30_000, result };
+        cachedFailure = undefined;
+        return result;
+      },
+      (error: unknown) => {
+        cachedFailure = { error, expiresAt: now() + 1_000 };
+        cachedSuccess = undefined;
+        throw error;
+      },
+    ).finally(() => {
+      if (inFlight === shared) inFlight = undefined;
+    });
+    inFlight = shared;
+    return shared;
+  };
 }

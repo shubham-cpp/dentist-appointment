@@ -4,7 +4,7 @@ import { loadVoiceRuntimeSelection } from "./runtime-switch";
 
 test("keeps the current gateway as the safe default", () => {
   assert.equal(loadVoiceRuntimeSelection({}), "current-gateway");
-  assert.equal(loadVoiceRuntimeSelection({ VOICE_RUNTIME: "conversation-relay" }), "current-gateway");
+  assert.equal(loadVoiceRuntimeSelection({ VOICE_RUNTIME: "current-gateway" }), "current-gateway");
 });
 
 test("selects each experiment candidate explicitly", () => {
@@ -12,10 +12,14 @@ test("selects each experiment candidate explicitly", () => {
   assert.equal(loadVoiceRuntimeSelection({ VOICE_RUNTIME: "telnyx-candidate" }), "telnyx-candidate");
 });
 
-test("normalizes the legacy Telnyx runtime during migration", () => {
-  assert.equal(
-    loadVoiceRuntimeSelection({ VOICE_RUNTIME: "telnyx-ai-assistant" }),
-    "telnyx-candidate",
+test("rejects legacy aliases after the runtime migration", () => {
+  assert.throws(
+    () => loadVoiceRuntimeSelection({ VOICE_RUNTIME: "conversation-relay" }),
+    /VOICE_RUNTIME must be/,
+  );
+  assert.throws(
+    () => loadVoiceRuntimeSelection({ VOICE_RUNTIME: "telnyx-ai-assistant" }),
+    /VOICE_RUNTIME must be/,
   );
 });
 

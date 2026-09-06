@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createVoiceCallContext } from "../src/lib/voice-call-context";
 import { voiceScenarioCorpus } from "../src/voice-experiment/scenario-harness";
-import { createTelnyxAssistantDraft } from "../src/voice-experiment/telnyx-candidate";
+import { createTelnyxAssistantDraft, telnyxCallTimeVariables } from "../src/voice-experiment/telnyx-candidate";
 import {
   TelnyxCandidateApiError,
   createTelnyxCandidateClient,
@@ -66,7 +66,12 @@ async function localRequest(
     },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error(`Local qualification request failed with ${response.status}.`);
+  if (!response.ok) {
+    if (response.status === 404 && path === "/internal/qualification-session" && init?.method === "POST") {
+      throw new Error("Managed dialogue tests require the Telnyx gateway to run with VOICE_ASSISTANT_TEST_MODE=true and VOICE_ASSISTANT_TEST_TOOL_TOKEN configured. No hosted update has been requested during readiness validation.");
+    }
+    throw new Error(`Local qualification request failed with ${response.status}.`);
+  }
   if (response.status === 204) return undefined;
   return response.json() as Promise<Record<string, unknown>>;
 }
@@ -147,30 +152,31 @@ function conversationToolCalls(messages: Array<Record<string, unknown>>) {
 
 async function main() {
   if (!process.argv.includes("--apply")) {
-    console.log("Use --apply to sync one qualification version and run 12 Telnyx web-chat tests. Use --limit=1 for calibration.");
+    console.log("Use --apply to create an isolated fictional qualification assistant and run the Telnyx web-chat corpus. Use --limit=1 for calibration.");
     return;
   }
   const limitArgument = process.argv.find((argument) => argument.startsWith("--limit="));
   const startArgument = process.argv.find((argument) => argument.startsWith("--start="));
   const casesArgument = process.argv.find((argument) => argument.startsWith("--cases="));
-  const reuseCurrent = process.argv.includes("--reuse-current");
-  const runLimit = limitArgument ? Number(limitArgument.slice("--limit=".length)) : 12;
+  const isolatedArgument = process.argv.find((argument) => argument.startsWith("--qualification-assistant="));
+  const isolatedAssistantId = isolatedArgument?.slice("--qualification-assistant=".length);
+  const runLimit = limitArgument ? Number(limitArgument.slice("--limit=".length)) : voiceScenarioCorpus.length;
   const startCase = startArgument ? Number(startArgument.slice("--start=".length)) : 1;
-  if (!Number.isInteger(runLimit) || runLimit < 1 || runLimit > 12) {
-    throw new Error("--limit must be an integer from 1 through 12.");
+  if (!Number.isInteger(runLimit) || runLimit < 1 || runLimit > voiceScenarioCorpus.length) {
+    throw new Error(`--limit must be an integer from 1 through ${voiceScenarioCorpus.length}.`);
   }
-  if (!Number.isInteger(startCase) || startCase < 1 || startCase > 12) {
-    throw new Error("--start must be an integer from 1 through 12.");
+  if (!Number.isInteger(startCase) || startCase < 1 || startCase > voiceScenarioCorpus.length) {
+    throw new Error(`--start must be an integer from 1 through ${voiceScenarioCorpus.length}.`);
   }
   const caseNumbers = casesArgument
     ? casesArgument.slice("--cases=".length).split(",").map(Number)
     : undefined;
   if (caseNumbers && (
     caseNumbers.length === 0
-    || caseNumbers.some((value) => !Number.isInteger(value) || value < 1 || value > 12)
+    || caseNumbers.some((value) => !Number.isInteger(value) || value < 1 || value > voiceScenarioCorpus.length)
     || new Set(caseNumbers).size !== caseNumbers.length
   )) {
-    throw new Error("--cases must contain unique numbers from 1 through 12.");
+    throw new Error(`--cases must contain unique numbers from 1 through ${voiceScenarioCorpus.length}.`);
   }
   const publicBaseUrl = await currentPublicBaseUrl();
   const config = loadTelnyxCandidateConfig({
@@ -182,8 +188,15 @@ async function main() {
   const testToolToken = required(config.testToolToken, "VOICE_ASSISTANT_TEST_TOOL_TOKEN");
   const client = createTelnyxCandidateClient({ apiKey: config.apiKey });
   const context = createVoiceCallContext(new Date());
+  // Validate the local test route before changing any hosted assistant settings.
+  await localRequest(config, "/internal/qualification-session", {
+    body: JSON.stringify({ callContext: context, scenarioId: "qualification-readiness" }),
+    method: "POST",
+  });
   const assistantDraft = createTelnyxAssistantDraft({
+    dataRetentionEnabled: true,
     defaultDynamicVariables: {
+      ...telnyxCallTimeVariables(context),
       attempt_id: "managed-web-chat-test",
       clinic_name: context.clinicName,
       patient_name: context.patientName,
@@ -191,19 +204,31 @@ async function main() {
     },
     publicBaseUrl,
   });
-  const existingAssistant = await client.getAssistant(config.assistantId);
-  const assistant = reuseCurrent || qualificationAssistantMatches(existingAssistant, assistantDraft)
-    ? existingAssistant
-    : await client.updateAssistant(config.assistantId, {
-        ...assistantDraft,
-        promote_to_main: true,
-        version_name: "Managed dialogue qualification",
-      });
+  // Chat does not resolve greeting/instruction templates like the voice start command.
+  // Render only this fictional fixture, while webhook headers keep their normal templates.
+  for (const [key, value] of Object.entries(assistantDraft.dynamic_variables ?? {})) {
+    assistantDraft.instructions = assistantDraft.instructions.replaceAll(`{{${key}}}`, value);
+    assistantDraft.greeting = assistantDraft.greeting.replaceAll(`{{${key}}}`, value);
+  }
+  if (isolatedAssistantId === config.assistantId) {
+    throw new Error("Use a separate qualification assistant. Tests must not change live-call retention or tool tokens.");
+  }
+  const existingAssistant = isolatedAssistantId ? await client.getAssistant(isolatedAssistantId) : undefined;
+  if (existingAssistant && !String(existingAssistant.name).startsWith("Willow isolated fictional")) {
+    throw new Error("The selected assistant is not an isolated fictional qualification assistant.");
+  }
+  const assistant = existingAssistant
+    ? qualificationAssistantMatches(existingAssistant, assistantDraft) ? existingAssistant
+      : await client.updateAssistant(isolatedAssistantId!, { ...assistantDraft, name: "Willow isolated fictional dialogue qualification", promote_to_main: true, version_name: "Fictional dialogue qualification" })
+    : await client.createAssistant({ ...assistantDraft, name: "Willow isolated fictional dialogue qualification" });
+  const qualificationAssistantId = required(assistant.id as string | undefined, "Qualification assistant ID");
+  const qualificationSuite = `${TELNYX_DIALOGUE_TEST_SUITE}-isolated`;
+  console.log(`Qualification assistant: ${qualificationAssistantId}. Live phone assistant unchanged.`);
   const versionId = required(assistant.version_id as string | undefined, "Assistant version ID");
   console.log(`Qualification assistant version: ${versionId}.`);
 
-  const drafts = createTelnyxDialogueTestDrafts(config.assistantId);
-  const existingTests = await client.listAssistantTests(TELNYX_DIALOGUE_TEST_SUITE);
+  const drafts = createTelnyxDialogueTestDrafts(qualificationAssistantId).map((draft) => ({ ...draft, test_suite: qualificationSuite }));
+  const existingTests = await client.listAssistantTests(qualificationSuite);
   const tests: Array<{ draft: typeof drafts[number]; testId: string }> = [];
   for (const draft of drafts) {
     const matches = existingTests.filter((entry) => entry.name === draft.name);
@@ -295,18 +320,19 @@ async function main() {
     `.voice-artifacts/qualification/telnyx-managed-dialogue-${versionId}-cases-${caseLabel}.json`,
   );
   await writeFile(artifactsFile, `${JSON.stringify({
-    assistantId: config.assistantId,
+    assistantId: qualificationAssistantId,
     assistantVersionId: versionId,
     channel: "web_chat",
     completedAt: new Date().toISOString(),
     counts,
     publicBaseUrl,
     results,
-    suite: TELNYX_DIALOGUE_TEST_SUITE,
+    suite: qualificationSuite,
   }, null, 2)}\n`);
   console.log(`Qualification result: ${counts.qualified}/${results.length}.`);
   console.log(`Evidence: ${artifactsFile}.`);
   console.log(`ASSISTANT_VERSION_ID=${versionId}`);
+  if (counts.qualified !== results.length) process.exitCode = 1;
 }
 
 await main();

@@ -9,7 +9,7 @@ import type { TwilioDialogueSession } from "./twilio-dialogue-session";
 
 test("routes setup, partial, final, interruption, and playback events", async () => {
   const calls: string[] = [];
-  const evidence: string[] = [];
+  const evidence: Array<{ payload: Record<string, unknown>; type: string }> = [];
   const session: TwilioDialogueSession = {
     close() {
       calls.push("close");
@@ -21,9 +21,6 @@ test("routes setup, partial, final, interruption, and playback events", async ()
       calls.push(`final:${text}`);
       return { status: "completed", text: "response" };
     },
-    revisePartial(text) {
-      calls.push(`partial:${text}`);
-    },
   };
   const runtime = createTwilioRelayRuntime({
     createSession(setup) {
@@ -31,7 +28,7 @@ test("routes setup, partial, final, interruption, and playback events", async ()
       return session;
     },
     async record(event) {
-      evidence.push(event.type);
+      evidence.push({ payload: event.payload, type: event.type });
     },
   });
 
@@ -51,17 +48,21 @@ test("routes setup, partial, final, interruption, and playback events", async ()
 
   assert.deepEqual(calls, [
     "setup:CA11111111111111111111111111111111:VX11111111111111111111111111111111",
-    "partial:Can you move",
     "final:Can you move it to Thursday?",
     "interrupt",
   ]);
-  assert.deepEqual(evidence, [
+  assert.deepEqual(evidence.map((event) => event.type), [
     "relay.setup",
     "transcript.partial",
     "transcript.final",
+    "model.output.completed",
     "relay.interrupt",
     "relay.tokens_played",
   ]);
+  assert.deepEqual(
+    evidence.find((event) => event.type === "model.output.completed")?.payload,
+    { status: "completed", text: "response" },
+  );
 });
 
 test("requires setup and closes safely on a provider error", async () => {
@@ -76,7 +77,6 @@ test("requires setup and closes safely on a provider error", async () => {
         async respond() {
           return { status: "completed", text: "" };
         },
-        revisePartial() {},
       };
     },
     async record() {},

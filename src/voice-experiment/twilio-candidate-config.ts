@@ -2,6 +2,10 @@ import { z } from "zod";
 import { isLoopbackHttpUrl } from "@/lib/loopback-url";
 import { loadVoiceGatewayInternalSettings } from "@/lib/voice-gateway-internal";
 import { loadVoiceGatewayPublicBaseUrl } from "@/lib/voice-gateway-public";
+import {
+  loadControlledCallSafetyPolicy,
+  type ControlledCallSafetyPolicy,
+} from "@/voice-core/call-safety-policy";
 
 const e164PhoneNumber = /^\+[1-9]\d{7,14}$/;
 
@@ -13,15 +17,14 @@ const schema = z.object({
   VOICE_AI_API_KEY: z.string().min(1).default("local-codex-proxy-placeholder"),
   VOICE_AI_BASE_URL: z.string().url().default("http://127.0.0.1:18765/v1"),
   VOICE_AI_MODEL: z.literal("gpt-5.6-luna-fast").default("gpt-5.6-luna-fast"),
-  VOICE_CALLS_ENABLED: z.literal("true"),
-  VOICE_DEMO_MODE: z.literal("true"),
   VOICE_GATEWAY_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  VOICE_RECORDING_ENABLED: z.enum(["true", "false"]).default("false"),
   VOICE_RUNTIME: z.literal("twilio-candidate", {
     error: "VOICE_RUNTIME must be twilio-candidate for this server.",
   }),
 });
 
-export type TwilioCandidateConfig = {
+export type TwilioCandidateConfig = ControlledCallSafetyPolicy & {
   aiApiKey: string;
   aiBaseUrl: string;
   aiModel: "gpt-5.6-luna-fast";
@@ -31,6 +34,7 @@ export type TwilioCandidateConfig = {
   internalSecret: string;
   internalUrl: string;
   publicBaseUrl: string;
+  recordingEnabled: boolean;
   runtime: "twilio-candidate";
   twilioAccountSid: string;
   twilioAuthToken: string;
@@ -52,16 +56,19 @@ export function loadTwilioCandidateConfig(
     throw new Error("VOICE_AI_BASE_URL must use a loopback HTTP address for the local demo.");
   }
   const internal = loadVoiceGatewayInternalSettings(environment);
+  const safetyPolicy = loadControlledCallSafetyPolicy(environment);
   return {
     aiApiKey: parsed.data.VOICE_AI_API_KEY,
     aiBaseUrl: aiBaseUrl.toString().replace(/\/$/, ""),
     aiModel: parsed.data.VOICE_AI_MODEL,
     artifactsRoot: ".voice-artifacts",
     callToNumber: parsed.data.CALL_TO_NUMBER,
+    ...safetyPolicy,
     gatewayPort: parsed.data.VOICE_GATEWAY_PORT,
     internalSecret: internal.internalSecret,
     internalUrl: internal.internalUrl,
     publicBaseUrl: loadVoiceGatewayPublicBaseUrl(environment),
+    recordingEnabled: parsed.data.VOICE_RECORDING_ENABLED === "true",
     runtime: parsed.data.VOICE_RUNTIME,
     twilioAccountSid: parsed.data.TWILIO_ACCOUNT_SID,
     twilioAuthToken: parsed.data.TWILIO_AUTH_TOKEN,

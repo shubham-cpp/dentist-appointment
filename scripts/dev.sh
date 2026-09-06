@@ -104,6 +104,11 @@ validate_gateway_configuration() {
     config_loader='loadTelnyxCandidateConfig'
   fi
 
+  if [[ "${VOICE_RUNTIME:-}" == "telnyx-relay" ]]; then
+    config_import='./src/voice-relay/config.ts'
+    config_loader='loadRelayConfig'
+  fi
+
   if "$start_ngrok"; then
     VOICE_GATEWAY_PUBLIC_BASE_URL="https://voice-demo.invalid" \
       VOICE_CONFIG_IMPORT="$config_import" \
@@ -232,7 +237,7 @@ voice_runtime="$(node --env-file=.env.local --import tsx --input-type=module -e 
 # Node preserves inherited variables over --env-file. Export the canonical value
 # so validation and the watched gateway always select the same runtime.
 export VOICE_RUNTIME="$voice_runtime"
-if [[ "$voice_runtime" == "telnyx-candidate" ]]; then
+if [[ "$voice_runtime" == "telnyx-candidate" || "$voice_runtime" == "telnyx-relay" ]]; then
   start_proxy=false
 fi
 
@@ -308,18 +313,21 @@ fi
 start_service gateway pnpm voice:dev
 wait_for_http "http://127.0.0.1:3001/health" "Voice gateway"
 
-start_service dashboard env NODE_OPTIONS="--max-old-space-size=512" pnpm exec next dev
+start_service dashboard env NODE_OPTIONS="--max-old-space-size=512" pnpm exec next dev --hostname 127.0.0.1
 wait_for_http "http://127.0.0.1:3000/dashboard" "Dashboard"
 
 if "$run_preflight"; then
   printf 'Running voice-demo preflight...\n'
-  if [[ "$voice_runtime" == "twilio-candidate" || "$voice_runtime" == "telnyx-candidate" ]]; then
+  if [[ "$voice_runtime" == "twilio-candidate" || "$voice_runtime" == "telnyx-candidate" || "$voice_runtime" == "telnyx-relay" ]]; then
     node --env-file=.env.local --input-type=module -e '
       const base = (process.env.VOICE_GATEWAY_INTERNAL_URL ?? "http://127.0.0.1:3001").replace(/\/$/, "");
       const response = await fetch(`${base}/internal/preflight`, {
         headers: { "x-voice-gateway-secret": process.env.VOICE_GATEWAY_INTERNAL_SECRET },
       });
-      if (!response.ok) process.exit(1);
+      if (!response.ok) {
+        console.error(await response.text());
+        process.exit(1);
+      }
     '
   else
     pnpm voice:preflight

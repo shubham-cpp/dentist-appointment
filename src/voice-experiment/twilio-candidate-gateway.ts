@@ -1,16 +1,19 @@
-import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyRequest } from "fastify";
 import formbody from "@fastify/formbody";
 import websocket from "@fastify/websocket";
 import { z } from "zod";
-import { voiceCallContextSchema } from "@/lib/voice-call-context";
-import { voiceGatewayInternalSecretHeader } from "@/lib/voice-gateway-internal";
+import { isControlledVoiceAttemptTransportTerminal } from "@/lib/controlled-voice-attempt";
+import {
+  createInternalVoiceRequestAuthorizer,
+  registerControlledAttemptReadRoutes,
+  registerControlledAttemptStartRoute,
+} from "@/voice-runtime/internal-attempt-routes";
 import type {
   VoiceAttemptStore,
   VoiceAttemptTransportStatus,
-} from "@/voice-gateway/attempt-store";
+} from "@/voice-core/attempt-store";
 import { createLocalOpenAiVoiceDialogueModel } from "./openai-dialogue-model";
-import { createVoiceSchedulingAuthority } from "./scheduling-authority";
+import { createVoiceSchedulingAuthority } from "@/voice-core/scheduling-authority";
 import type { TwilioCandidateCallController } from "./twilio-call-controller";
 import { createTwilioCandidateTwiML } from "./twilio-candidate";
 import { createTwilioDialogueSession } from "./twilio-dialogue-session";
@@ -22,8 +25,6 @@ import {
 
 const attemptQuery = z.object({ attempt: z.string().startsWith("voice_") });
 const callSid = z.string().regex(/^CA[a-fA-F0-9]{32}$/);
-const requestId = z.string().uuid();
-const startBody = z.object({ callContext: voiceCallContextSchema }).strict();
 const twimlBody = z.object({ CallSid: callSid });
 const statusBody = z.object({
   CallSid: callSid,
@@ -63,13 +64,9 @@ const relayMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("tokens-played") }).passthrough(),
   z.object({ description: z.string().max(500), type: z.literal("error") }),
 ]);
-
-function sameSecret(provided: string | undefined, expected: string) {
-  if (!provided) return false;
-  const left = Buffer.from(provided);
-  const right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
+const maxRelayMessageBytes = 16 * 1_024;
+const maxQueuedRelayBytes = 64 * 1_024;
+const maxQueuedRelayMessages = 16;
 
 function formParameters(body: unknown) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return {};
@@ -107,17 +104,14 @@ export function createTwilioCandidateGateway(options: {
     publicBaseUrl: string;
   };
   controller: TwilioCandidateCallController;
-  preflight(): Promise<void>;
+  preflight(): Promise<unknown>;
   validateRequest(signature: string, url: string, params: Record<string, string>): boolean;
 }) {
   const app = Fastify({ logger: false });
   void app.register(formbody);
   void app.register(websocket);
 
-  function internal(request: FastifyRequest) {
-    const value = request.headers[voiceGatewayInternalSecretHeader];
-    return sameSecret(Array.isArray(value) ? value[0] : value, options.config.internalSecret);
-  }
+  const internal = createInternalVoiceRequestAuthorizer(options.config.internalSecret);
 
   function signed(request: FastifyRequest) {
     const signature = request.headers["x-twilio-signature"];
@@ -146,45 +140,16 @@ export function createTwilioCandidateGateway(options: {
     }
   });
 
-  app.post("/internal/controlled-attempt", async (request, reply) => {
-    if (!internal(request)) return reply.code(401).send({ error: "unauthorized" });
-    const parsedRequestId = requestId.safeParse(request.headers["x-voice-request-id"]);
-    const body = startBody.safeParse(request.body);
-    if (!parsedRequestId.success || !body.success) {
-      return reply.code(400).send({ error: "invalid_request" });
-    }
-    try {
-      const started = await options.controller.start({
-        context: body.data.callContext,
-        requestId: parsedRequestId.data,
-      });
-      return reply.code(201).send({ attempt: options.attempts.getView(started.attemptId) });
-    } catch (error) {
-      return reply.code(503).send({
-        error: error instanceof Error ? error.message : "twilio_candidate_unavailable",
-      });
-    }
+  registerControlledAttemptStartRoute(app, {
+    attempts: options.attempts,
+    isAuthorized: internal,
+    start: (input) => options.controller.start(input),
+    unavailableError: "twilio_candidate_unavailable",
   });
 
-  app.get("/internal/controlled-attempt/current", async (request, reply) => {
-    if (!internal(request)) return reply.code(401).send({ error: "unauthorized" });
-    const attempt = options.attempts.getActiveView();
-    return attempt ? { attempt } : reply.code(404).send({ error: "not_found" });
-  });
-
-  app.get("/internal/controlled-attempt/by-request/:requestId", async (request, reply) => {
-    if (!internal(request)) return reply.code(401).send({ error: "unauthorized" });
-    const parsed = requestId.safeParse((request.params as { requestId?: string }).requestId);
-    if (!parsed.success) return reply.code(400).send({ error: "invalid_request_id" });
-    const attempt = options.attempts.getViewByRequestId(parsed.data);
-    return attempt ? { attempt } : reply.code(404).send({ error: "not_found" });
-  });
-
-  app.get("/internal/controlled-attempt/:attemptId", async (request, reply) => {
-    if (!internal(request)) return reply.code(401).send({ error: "unauthorized" });
-    const { attemptId } = request.params as { attemptId?: string };
-    const attempt = attemptId ? options.attempts.getView(attemptId) : undefined;
-    return attempt ? { attempt } : reply.code(404).send({ error: "not_found" });
+  registerControlledAttemptReadRoutes(app, {
+    attempts: options.attempts,
+    isAuthorized: internal,
   });
 
   app.post("/internal/controlled-attempt/:attemptId/stop", async (request, reply) => {
@@ -203,7 +168,14 @@ export function createTwilioCandidateGateway(options: {
     const body = twimlBody.safeParse(request.body);
     if (!query.success || !body.success) return reply.code(400).send();
     try {
-      const attempt = options.attempts.bindCallSid(query.data.attempt, body.data.CallSid);
+      const attempt = options.attempts.bindProviderCallId(query.data.attempt, body.data.CallSid);
+      if (attempt.transportStatus === "cancel_requested"
+        || options.controller.isStopRequested?.(attempt.id)) {
+        await options.controller.stop(attempt.id).catch(() => undefined);
+        return reply.type("text/xml").send(
+          '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
+        );
+      }
       return reply.type("text/xml").send(createTwilioCandidateTwiML({
         attemptId: attempt.id,
         context: attempt.callContext,
@@ -221,10 +193,15 @@ export function createTwilioCandidateGateway(options: {
     const body = statusBody.safeParse(request.body);
     if (!query.success || !body.success) return reply.code(400).send();
     try {
-      options.attempts.updateStatus(
+      const current = options.attempts.getAttempt(query.data.attempt);
+      const nextStatus = body.data.CallStatus === "completed"
+        && current?.transportStatus === "cancel_requested"
+        ? "canceled"
+        : transportStatus(body.data.CallStatus);
+      const attempt = options.attempts.updateStatus(
         query.data.attempt,
         body.data.CallSid,
-        transportStatus(body.data.CallStatus),
+        nextStatus,
         body.data.SequenceNumber,
       );
       await options.controller.evidence(query.data.attempt)?.record({
@@ -235,6 +212,9 @@ export function createTwilioCandidateGateway(options: {
         source: "twilio-status-callback",
         type: body.data.CallStatus === "in-progress" ? "destination.answered" : "call.status",
       });
+      if (isControlledVoiceAttemptTransportTerminal(attempt.transportStatus)) {
+        await options.controller.finalize(attempt.id);
+      }
       return reply.code(204).send();
     } catch {
       return reply.code(409).send();
@@ -248,7 +228,7 @@ export function createTwilioCandidateGateway(options: {
     if (!query.success || !body.success) return reply.code(400).send();
     const attempt = options.attempts.getAttempt(query.data.attempt);
     const recorder = options.controller.evidence(query.data.attempt);
-    if (!attempt || attempt.callSid !== body.data.CallSid || !recorder) {
+    if (!attempt || attempt.providerCallId !== body.data.CallSid || !recorder) {
       return reply.code(409).send();
     }
     await recorder.record({
@@ -291,6 +271,13 @@ export function createTwilioCandidateGateway(options: {
             applyResult(result) {
               options.attempts.setResultByRelayToken(setup.customParameters.relayToken, result);
             },
+            recordStaffFollowUp(result) {
+              if (result.callback) {
+                const { date, time, timeEnd, timeZone } = result.callback;
+                options.attempts.recordRelayNotice(setup.customParameters.relayToken,
+                  `Demo callback requested for ${date} around ${time}${timeEnd ? ` to ${timeEnd}` : ""} ${timeZone}. Return call is simulated.`);
+              }
+            },
             context: attempt.callContext,
           });
           const model = createLocalOpenAiVoiceDialogueModel({
@@ -305,21 +292,76 @@ export function createTwilioCandidateGateway(options: {
             model,
             send(message) {
               socket.send(JSON.stringify(message));
-              void recorder.record({
-                channel: "model",
-                monotonicMs: performance.now(),
-                observedAt: new Date().toISOString(),
-                payload: message,
-                source: "twilio-candidate-dialogue",
-                type: message.last ? "model.output.completed" : "model.output.chunk",
-              });
             },
           });
         },
         record: (event) => recorder.record(event),
       });
 
+      type QueuedRelayMessage = { bytes: number; message: TwilioRelayMessage };
+      const queue: QueuedRelayMessage[] = [];
+      let queuedBytes = 0;
+      let processing = false;
+      let closed = false;
+
+      function failRelay(code: number, reason: string) {
+        if (closed) return;
+        closed = true;
+        queue.length = 0;
+        queuedBytes = 0;
+        runtime.close();
+        socket.close(code, reason);
+      }
+
+      async function drainQueue() {
+        if (processing || closed) return;
+        processing = true;
+        try {
+          while (!closed && queue.length > 0) {
+            const entry = queue.shift()!;
+            queuedBytes -= entry.bytes;
+            await runtime.handle(entry.message);
+          }
+        } catch {
+          failRelay(1011, "Relay runtime failed.");
+        } finally {
+          processing = false;
+        }
+      }
+
+      function dispatch(message: TwilioRelayMessage, bytes: number) {
+        if (message.type === "interrupt") {
+          void runtime.handle(message).catch(() => failRelay(1011, "Relay runtime failed."));
+          return;
+        }
+
+        const last = queue.at(-1);
+        if (message.type === "prompt" && !message.last
+          && last?.message.type === "prompt" && !last.message.last) {
+          queuedBytes -= last.bytes;
+          if (queuedBytes + bytes > maxQueuedRelayBytes) {
+            failRelay(1009, "Relay message backlog exceeded its limit.");
+            return;
+          }
+          last.bytes = bytes;
+          last.message = message;
+          queuedBytes += bytes;
+          return;
+        }
+        if (queue.length >= maxQueuedRelayMessages || queuedBytes + bytes > maxQueuedRelayBytes) {
+          failRelay(1009, "Relay message backlog exceeded its limit.");
+          return;
+        }
+        queue.push({ bytes, message });
+        queuedBytes += bytes;
+        void drainQueue();
+      }
+
       socket.on("message", (payload: Buffer) => {
+        if (payload.byteLength > maxRelayMessageBytes) {
+          socket.close(1009, "Relay message is too large.");
+          return;
+        }
         let value: unknown;
         try {
           value = JSON.parse(payload.toString());
@@ -332,11 +374,14 @@ export function createTwilioCandidateGateway(options: {
           socket.close(1008, "Unsupported Relay message.");
           return;
         }
-        void runtime.handle(parsed.data as TwilioRelayMessage).catch(() => {
-          socket.close(1011, "Relay runtime failed.");
-        });
+        dispatch(parsed.data as TwilioRelayMessage, payload.byteLength);
       });
-      socket.on("close", () => runtime.close());
+      socket.on("close", () => {
+        closed = true;
+        queue.length = 0;
+        queuedBytes = 0;
+        runtime.close();
+      });
     });
   });
 

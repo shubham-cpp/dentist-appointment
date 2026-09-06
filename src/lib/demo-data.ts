@@ -115,6 +115,7 @@ export const initialAppointments: Appointment[] = [
   { id: "ava", patient: "Ava Chen", initials: "AC", type: "Exam", providerId: "patel", startMinutes: 930, duration: 45, bufferAfter: 15, status: "confirmed", phone: "(555) 301-4438" },
   { id: "james", patient: "James Wilson", initials: "JW", type: "Exam + X-ray", providerId: "chen", startMinutes: 480, duration: 60, bufferAfter: 15, status: "confirmed", phone: "(555) 708-2914" },
   { id: "isabella", patient: "Isabella Rossi", initials: "IR", type: "Hygiene", providerId: "chen", startMinutes: 600, duration: 60, bufferAfter: 15, status: "checked-in", phone: "(555) 892-1107", email: "isabella.rossi@example.com" },
+  { id: "noah-conflict", patient: "Noah Brown", initials: "NB", type: "Hygiene visit", providerId: "chen", day: "Tue, 8 Aug", startMinutes: 660, duration: 60, bufferAfter: 15, status: "confirmed", phone: "(555) 381-2047" },
   { id: "michael", patient: "Michael Thompson", initials: "MT", type: "Consultation", providerId: "chen", startMinutes: 690, duration: 45, bufferAfter: 15, status: "confirmed", phone: "(555) 430-6672" },
   { id: "ethan", patient: "Ethan Lee", initials: "EL", type: "Filling", providerId: "chen", startMinutes: 810, duration: 60, bufferAfter: 15, status: "confirmed", phone: "(555) 461-7730" },
   { id: "priya", patient: "Priya Shah", initials: "PS", type: "Hygiene", providerId: "chen", startMinutes: 930, duration: 60, bufferAfter: 15, status: "confirmed", phone: "(555) 616-8389" },

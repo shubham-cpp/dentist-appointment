@@ -571,7 +571,7 @@
           <tbody>
             <tr>
               <td><strong>Current gateway</strong></td>
-              <td><code>current-gateway</code> or <code>conversation-relay</code></td>
+              <td><code>current-gateway</code></td>
               <td>Twilio ConversationRelay</td>
               <td>Local phrase match or one classified intent, then fixed replies</td>
               <td><span class="state state-ready">Default baseline</span></td>
@@ -585,7 +585,7 @@
             </tr>
             <tr>
               <td><strong>Telnyx managed candidate</strong></td>
-              <td><code>telnyx-candidate</code> or <code>telnyx-ai-assistant</code></td>
+              <td><code>telnyx-candidate</code></td>
               <td>Telnyx Call Control with an embedded AI Assistant</td>
               <td>GPT-5.6 Luna, Deepgram Flux, Maeve voice, and five webhooks</td>
               <td><span class="state state-progress">Candidate</span></td>
@@ -687,7 +687,7 @@
     <section id="authority" aria-labelledby="authority-heading">
       <h2 id="authority-heading">The scheduling authority stays local</h2>
       <p>
-        Both new candidates call the same authority in <code>src/voice-experiment/scheduling-authority.ts</code>.
+        Both new candidates call the same authority in <code>src/voice-core/scheduling-authority.ts</code>.
         The provider and model cannot bypass it.
       </p>
 
@@ -819,12 +819,12 @@
                 <tr><td>Dashboard control plane</td><td><a href="../src/app/(workspace)/dashboard/actions.ts"><code>src/app/(workspace)/dashboard/actions.ts</code></a></td></tr>
                 <tr><td>Default gateway</td><td><a href="../src/voice-gateway/server.ts"><code>src/voice-gateway/server.ts</code></a></td></tr>
                 <tr><td>Runtime switch</td><td><a href="../src/voice-experiment/runtime-switch.ts"><code>src/voice-experiment/runtime-switch.ts</code></a></td></tr>
-                <tr><td>Shared scheduling authority</td><td><a href="../src/voice-experiment/scheduling-authority.ts"><code>src/voice-experiment/scheduling-authority.ts</code></a></td></tr>
+                <tr><td>Shared scheduling authority</td><td><a href="../src/voice-core/scheduling-authority.ts"><code>src/voice-core/scheduling-authority.ts</code></a></td></tr>
                 <tr><td>Improved Twilio gateway</td><td><a href="../src/voice-experiment/twilio-candidate-gateway.ts"><code>src/voice-experiment/twilio-candidate-gateway.ts</code></a></td></tr>
                 <tr><td>Telnyx assistant definition</td><td><a href="../src/voice-experiment/telnyx-candidate.ts"><code>src/voice-experiment/telnyx-candidate.ts</code></a></td></tr>
                 <tr><td>Telnyx gateway</td><td><a href="../src/voice-experiment/telnyx-candidate-gateway.ts"><code>src/voice-experiment/telnyx-candidate-gateway.ts</code></a></td></tr>
                 <tr><td>Shared scenarios</td><td><a href="../src/voice-experiment/scenario-harness.ts"><code>src/voice-experiment/scenario-harness.ts</code></a></td></tr>
-                <tr><td>Evidence recorder</td><td><a href="../src/voice-experiment/evidence-recorder.ts"><code>src/voice-experiment/evidence-recorder.ts</code></a></td></tr>
+                <tr><td>Evidence recorder</td><td><a href="../src/voice-core/evidence-recorder.ts"><code>src/voice-core/evidence-recorder.ts</code></a></td></tr>
                 <tr><td>Latest execution status</td><td><a href="wayfinder/voice-runtime-demo/tickets/10-run-local-safety-and-dialogue-qualification.md"><code>ticket 10</code></a></td></tr>
               </tbody>
             </table>

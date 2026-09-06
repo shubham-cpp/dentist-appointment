@@ -1,3 +1,4 @@
+import { voiceReschedulingConversationGuidance } from "@/voice-core/conversation-guidance";
 import { createOpenAI, type OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import {
   stepCountIs,
@@ -6,16 +7,15 @@ import {
   type LanguageModel,
   type ModelMessage,
 } from "ai";
-import { z } from "zod";
 import type { VoiceCallContext } from "@/lib/voice-call-context";
 import type { VoiceDialogueModel } from "./twilio-dialogue-session";
-import type { VoiceEvidenceEvent } from "./evidence-recorder";
-import type {
-  VoiceSchedulingAuthority,
-  VoiceSchedulingCommand,
-} from "./scheduling-authority";
-
-const operationId = z.string().min(1).max(100);
+import type { VoiceEvidenceEvent } from "@/voice-core/evidence-recorder";
+import {
+  voiceSchedulingToolBodySchemas,
+  voiceSchedulingToolDescriptions,
+  type VoiceSchedulingAuthority,
+  type VoiceSchedulingCommand,
+} from "@/voice-core/scheduling-authority";
 
 type VoiceToolEvent = Omit<VoiceEvidenceEvent, "channel">;
 
@@ -60,54 +60,28 @@ export function createVoiceSchedulingTools(
 
   return {
     verify_identity: tool({
-      description: "Record whether the caller is the intended fictional patient. Use this before appointment facts.",
-      inputSchema: z.object({
-        operationId,
-        result: z.enum(["confirmed", "unclear", "wrong_person"]),
-      }).strict(),
+      description: voiceSchedulingToolDescriptions.verify_identity,
+      inputSchema: voiceSchedulingToolBodySchemas.verify_identity,
       execute: (input) => execute({ name: "verify_identity", ...input }),
     }),
     find_slots: tool({
-      description: "Return eligible fictional replacement times after identity confirmation.",
-      inputSchema: z.object({
-        dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        limit: z.number().int().min(1).max(6).optional(),
-        operationId,
-        provider: z.enum(["any", "current"]),
-        timePreference: z.enum(["morning", "afternoon", "evening"]).optional(),
-      }).strict(),
+      description: voiceSchedulingToolDescriptions.find_slots,
+      inputSchema: voiceSchedulingToolBodySchemas.find_slots,
       execute: (input) => execute({ name: "find_slots", ...input }),
     }),
     prepare_change: tool({
-      description: "Prepare one server-side reschedule or cancellation. This does not change the appointment.",
-      inputSchema: z.discriminatedUnion("kind", [
-        z.object({
-          kind: z.literal("reschedule"),
-          operationId,
-          slotId: z.string().min(1),
-        }).strict(),
-        z.object({
-          kind: z.literal("cancellation"),
-          operationId,
-        }).strict(),
-      ]),
+      description: voiceSchedulingToolDescriptions.prepare_change,
+      inputSchema: voiceSchedulingToolBodySchemas.prepare_change,
       execute: (input) => execute({ name: "prepare_change", ...input }),
     }),
     commit_change: tool({
-      description: "Commit only the prepared server-side action after the caller gives exact confirmation.",
-      inputSchema: z.object({
-        actionToken: z.string().min(1),
-        confirmed: z.boolean(),
-        operationId,
-      }).strict(),
+      description: voiceSchedulingToolDescriptions.commit_change,
+      inputSchema: voiceSchedulingToolBodySchemas.commit_change,
       execute: (input) => execute({ name: "commit_change", ...input }),
     }),
     request_staff_follow_up: tool({
-      description: "Record a staff follow-up when automation cannot continue safely.",
-      inputSchema: z.object({
-        operationId,
-        reason: z.string().min(1).max(200),
-      }).strict(),
+      description: voiceSchedulingToolDescriptions.request_staff_follow_up,
+      inputSchema: voiceSchedulingToolBodySchemas.request_staff_follow_up,
       execute: (input) => execute({ name: "request_staff_follow_up", ...input }),
     }),
   };
@@ -134,17 +108,7 @@ export function createTwilioCandidateSystemPrompt(context: VoiceCallContext) {
   return [
     `You are Willow, the scheduling assistant for ${context.clinicName}.`,
     `This fictional call concerns ${context.patientName}.`,
-    "Use warm, concise American English and natural conversation.",
-    "Respond directly to questions, corrections, silence, and topic changes.",
-    "Keep the caller's goal after an interruption. Do not restart answered questions.",
-    "Use verify_identity before you disclose appointment details.",
-    "Use find_slots for every availability claim. Never invent a date, time, or provider.",
-    "Use prepare_change after the caller selects one returned slot or requests cancellation.",
-    "Ask for exact confirmation of the complete change before you use commit_change.",
-    "Never claim that an appointment changed unless commit_change returns change_committed.",
-    "Do not give clinical advice. Refer clinical questions to clinic staff, then resume scheduling when appropriate.",
-    "Use request_staff_follow_up when identity fails, a tool fails, or safe automation cannot continue.",
-    "Keep most replies under two short sentences. Ask one useful question at a time.",
+    voiceReschedulingConversationGuidance(),
     `The clinic timezone is ${context.clinicTimeZone}. The current clinic date is ${context.currentDateLabel}.`,
   ].join(" ");
 }
@@ -204,19 +168,6 @@ export function createOpenAiVoiceDialogueModel(options: {
       }
       if (turn.signal.aborted) return;
       messages.push(userMessage, ...await result.responseMessages);
-    },
-    async prefetch(turn) {
-      const result = options.runner.run({
-        messages: [...messages, { content: turn.callerText, role: "user" }],
-        signal: turn.signal,
-        system,
-        tools,
-        toolsEnabled: false,
-      });
-      for await (const token of result.textStream) {
-        void token;
-        if (turn.signal.aborted) return;
-      }
     },
   };
 }
